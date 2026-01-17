@@ -1,0 +1,2 @@
+# HUSH CLI Dependencies
+mnemonic>=0.20

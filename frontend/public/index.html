@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#e94560" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HUSH" />
+
+  <!-- Security -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'wasm-unsafe-eval';
+    style-src 'self' 'unsafe-inline';
+    connect-src 'self' wss: ws:;
+    img-src 'self' data: blob:;
+  " />
+
+  <!-- App Info -->
+  <title>HUSH</title>
+  <meta name="description" content="Zero-Knowledge Encrypted Chat" />
+
+  <!-- Manifest -->
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+
+  <!-- iOS Splash Screens -->
+  <link rel="apple-touch-startup-image" href="/splash-640x1136.png"
+        media="(device-width: 320px) and (device-height: 568px)" />
+  <link rel="apple-touch-startup-image" href="/splash-750x1334.png"
+        media="(device-width: 375px) and (device-height: 667px)" />
+  <link rel="apple-touch-startup-image" href="/splash-1242x2208.png"
+        media="(device-width: 414px) and (device-height: 736px)" />
+  <link rel="apple-touch-startup-image" href="/splash-1125x2436.png"
+        media="(device-width: 375px) and (device-height: 812px)" />
+
+  <!-- Preload critical assets -->
+  <link rel="preload" href="/argon2-wasm/argon2.wasm" as="fetch" crossorigin />
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+
+  <!-- No-JS fallback -->
+  <noscript>
+    <style>
+      #root { display: none; }
+      .no-js { display: block !important; }
+    </style>
+    <div class="no-js" style="padding: 2rem; text-align: center;">
+      <h1>HUSH requires JavaScript</h1>
+      <p>Please enable JavaScript to use this application.</p>
+    </div>
+  </noscript>
+</body>
+</html>

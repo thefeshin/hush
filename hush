@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""
+HUSH - Single-command deployment CLI
+Usage: ./hush deploy
+"""
+
+import sys
+import os
+
+# Add cli directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'cli'))
+
+from main import main
+
+if __name__ == '__main__':
+    main()
