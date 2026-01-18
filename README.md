@@ -4,9 +4,18 @@ Private, encrypted conversations with zero server knowledge.
 
 ---
 
-## Production Deployment (Docker) - Recommended
+## Prerequisites
 
-**Bash (Linux/Mac):**
+- Docker 20.10+
+- Docker Compose 2.0+
+- Python 3.7+
+- OpenSSL (included with Git for Windows, pre-installed on Linux/macOS)
+
+---
+
+## Deployment
+
+**Bash (Linux/macOS):**
 ```bash
 chmod +x hush
 ./hush deploy
@@ -17,11 +26,12 @@ chmod +x hush
 python hush deploy
 ```
 
-This will:
-1. Prompt for security configuration (max failures, failure mode, etc.)
-2. Generate 12-word passphrase and secrets
-3. Build all Docker containers
-4. Start PostgreSQL, backend, frontend, and Nginx
+This single command automatically:
+1. Installs required Python packages
+2. Generates SSL certificates (if missing)
+3. Prompts for security configuration
+4. Generates 12-word passphrase and secrets
+5. Builds and starts all Docker containers
 
 Access at: **https://localhost**
 
