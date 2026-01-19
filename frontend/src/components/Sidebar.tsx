@@ -2,7 +2,7 @@
  * Sidebar with contacts and threads
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useContactStore } from '../stores/contactStore';
 import { useThreadStore } from '../stores/threadStore';
@@ -163,9 +163,10 @@ function ContactItem({
 }) {
   const { createThread } = useThreadStore();
   const { getThreadId, encryptIdentity } = useCrypto();
+  const token = useAuthStore(state => state.token);
 
   const handleStartChat = async () => {
-    await createThread(
+    const thread = await createThread(
       identity.userId,
       identity.displayName,
       contact.uuid,
@@ -173,6 +174,23 @@ function ContactItem({
       getThreadId,
       encryptIdentity
     );
+
+    // Also create thread on server if it was newly created
+    if (token && thread) {
+      try {
+        const { getSyncService } = await import('../services/sync');
+        const syncService = getSyncService(token);
+        const encrypted = await encryptIdentity({
+          participants: [identity.userId, contact.uuid].sort(),
+          created_by: { user_id: identity.userId, display_name: identity.displayName },
+          created_at: thread.createdAt
+        });
+        await syncService.createThread(thread.threadId, encrypted);
+      } catch (err) {
+        // Thread might already exist on server, that's ok
+        console.log('Thread may already exist on server');
+      }
+    }
   };
 
   return (

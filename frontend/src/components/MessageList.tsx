@@ -2,7 +2,7 @@
  * Message list with auto-scroll
  */
 
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface Message {
   id: string;

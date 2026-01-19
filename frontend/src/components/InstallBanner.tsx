@@ -2,7 +2,7 @@
  * PWA install banner
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 export function InstallBanner() {

@@ -94,7 +94,7 @@ export class SyncService {
   async syncThread(
     threadId: string,
     lastSyncTime: Date | null,
-    decryptFn: (encrypted: EncryptedData) => Promise<string>
+    _decryptFn: (encrypted: EncryptedData) => Promise<string>
   ): Promise<number> {
     const messages = await this.fetchMessages(
       threadId,

@@ -16,14 +16,14 @@ const CONTACTS_INFO = 'hush-contacts';
 export async function deriveIdentityKey(vaultKey: VaultKey): Promise<CryptoKey> {
   // Use static salt for identity (same across sessions)
   const salt = stringToBytes('hush-local-identity-v1');
-  const saltHash = await crypto.subtle.digest('SHA-256', salt);
+  const saltHash = await crypto.subtle.digest('SHA-256', salt as Uint8Array<ArrayBuffer>);
 
   return crypto.subtle.deriveKey(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: new Uint8Array(saltHash),
-      info: stringToBytes(IDENTITY_INFO)
+      salt: new Uint8Array(saltHash) as Uint8Array<ArrayBuffer>,
+      info: stringToBytes(IDENTITY_INFO) as Uint8Array<ArrayBuffer>
     },
     vaultKey.key,
     {
@@ -41,14 +41,14 @@ export async function deriveIdentityKey(vaultKey: VaultKey): Promise<CryptoKey> 
  */
 export async function deriveContactsKey(vaultKey: VaultKey): Promise<CryptoKey> {
   const salt = stringToBytes('hush-local-contacts-v1');
-  const saltHash = await crypto.subtle.digest('SHA-256', salt);
+  const saltHash = await crypto.subtle.digest('SHA-256', salt as Uint8Array<ArrayBuffer>);
 
   return crypto.subtle.deriveKey(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: new Uint8Array(saltHash),
-      info: stringToBytes(CONTACTS_INFO)
+      salt: new Uint8Array(saltHash) as Uint8Array<ArrayBuffer>,
+      info: stringToBytes(CONTACTS_INFO) as Uint8Array<ArrayBuffer>
     },
     vaultKey.key,
     {

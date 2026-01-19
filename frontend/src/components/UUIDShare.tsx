@@ -3,7 +3,7 @@
  * Allows users to copy or display QR code of their UUID
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
 

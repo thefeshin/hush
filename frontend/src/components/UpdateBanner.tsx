@@ -2,7 +2,7 @@
  * Update available notification
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { onUpdateAvailable, applyUpdate } from '../services/serviceWorker';
 
 export function UpdateBanner() {

@@ -198,23 +198,24 @@ def main():
     generator = SecretGenerator()
     secrets = generator.generate_all()
 
-    # Step 3: Write configuration
+    # Step 3: Write configuration (temporarily - will delete on failure)
     print("[HUSH] Writing configuration...\n")
     config_manager.write_env(security_config, secrets)
 
-    # Step 4: Print secrets (ONCE ONLY)
-    print_secrets(secrets, security_config)
-
-    # Step 5: Build and run containers
-    print("\n[HUSH] Building containers...\n")
+    # Step 4: Build containers (BEFORE showing secrets)
+    print("[HUSH] Building containers...\n")
     build_result = subprocess.run(
         ['docker-compose', 'build'],
         capture_output=False
     )
     if build_result.returncode != 0:
         print("[HUSH] ERROR: Container build failed")
+        # Delete the generated config on build failure
+        config_manager.delete_env()
+        print("[HUSH] Configuration deleted due to build failure")
         sys.exit(1)
 
+    # Step 5: Start services
     print("\n[HUSH] Starting services...\n")
     run_result = subprocess.run(
         ['docker-compose', 'up', '-d'],
@@ -222,7 +223,13 @@ def main():
     )
     if run_result.returncode != 0:
         print("[HUSH] ERROR: Failed to start services")
+        # Delete the generated config on service start failure
+        config_manager.delete_env()
+        print("[HUSH] Configuration deleted due to service start failure")
         sys.exit(1)
+
+    # Step 6: Print secrets (ONLY AFTER successful deployment)
+    print_secrets(secrets, security_config)
 
     print("\n" + "=" * 60)
     print("[HUSH] Deployment complete!")

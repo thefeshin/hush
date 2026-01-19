@@ -2,7 +2,6 @@
  * Connection status indicator
  */
 
-import React from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { ConnectionState } from '../services/websocket';
 

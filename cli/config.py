@@ -70,3 +70,11 @@ BACKEND_PORT=8000
             os.chmod(self.env_path, 0o600)
         except OSError:
             pass  # Windows may not support Unix permissions
+
+    def delete_env(self):
+        """Delete .env file (used on deployment failure)"""
+        if self.env_exists():
+            try:
+                os.remove(self.env_path)
+            except OSError as e:
+                print(f"[HUSH] Warning: Could not delete .env file: {e}")

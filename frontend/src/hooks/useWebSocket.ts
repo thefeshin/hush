@@ -103,7 +103,7 @@ export function useWebSocket(): UseWebSocketReturn {
     handlersSetup.current = true;
 
     // Connection state handler
-    const unsubConnection = wsService.onConnectionChange((connected) => {
+    const unsubConnection = wsService.onConnectionChange(() => {
       setConnectionState(wsService.getState());
     });
 

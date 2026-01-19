@@ -2,7 +2,7 @@
  * Thread view with real-time subscription
  */
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useMessageStore } from '../stores/messageStore';

@@ -2,7 +2,6 @@
  * Offline mode indicator
  */
 
-import React from 'react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 export function OfflineIndicator() {

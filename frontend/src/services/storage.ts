@@ -59,7 +59,7 @@ let db: IDBPDatabase<HushDBSchema> | null = null;
  */
 export async function initDatabase(): Promise<void> {
   db = await openDB<HushDBSchema>(DB_NAME, DB_VERSION, {
-    upgrade(database, oldVersion, newVersion, transaction) {
+    upgrade(database) {
       // Identity store (single record)
       if (!database.objectStoreNames.contains('identity')) {
         database.createObjectStore('identity', { keyPath: 'id' });

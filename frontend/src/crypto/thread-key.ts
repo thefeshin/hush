@@ -31,7 +31,7 @@ export async function computeThreadId(
   const combined = `${sortedA}:${sortedB}`;
 
   const bytes = stringToBytes(combined);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>);
   const hashArray = new Uint8Array(hashBuffer);
 
   // Convert to UUID format (first 16 bytes as UUID)
@@ -60,15 +60,15 @@ export async function deriveThreadKey(
 
   // Use combined UUIDs as HKDF salt
   const salt = stringToBytes(combined);
-  const saltHash = await crypto.subtle.digest('SHA-256', salt);
+  const saltHash = await crypto.subtle.digest('SHA-256', salt as Uint8Array<ArrayBuffer>);
 
   // Derive thread key using HKDF
   const threadCryptoKey = await crypto.subtle.deriveKey(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: new Uint8Array(saltHash),
-      info: stringToBytes(HKDF_INFO)
+      salt: new Uint8Array(saltHash) as Uint8Array<ArrayBuffer>,
+      info: stringToBytes(HKDF_INFO) as Uint8Array<ArrayBuffer>
     },
     vaultKey.key,
     {

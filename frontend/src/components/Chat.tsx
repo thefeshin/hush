@@ -2,7 +2,7 @@
  * Main chat interface
  */
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useContactStore } from '../stores/contactStore';
 import { useThreadStore } from '../stores/threadStore';
@@ -16,7 +16,7 @@ import '../styles/chat.css';
 export function Chat() {
   const identity = useAuthStore(state => state.identity);
   const { contacts, loadAllContacts } = useContactStore();
-  const { threads, activeThreadId, loadAllThreads } = useThreadStore();
+  const { activeThreadId, loadAllThreads } = useThreadStore();
   const { decryptContacts, getThreadId, decryptIdentity } = useCrypto();
 
   // Load contacts on mount

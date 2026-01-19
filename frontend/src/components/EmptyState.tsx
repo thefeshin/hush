@@ -2,7 +2,6 @@
  * Empty state when no thread is selected
  */
 
-import React from 'react';
 
 export function EmptyState() {
   return (

@@ -32,10 +32,10 @@ export async function encrypt(
   const cipherBuffer = await crypto.subtle.encrypt(
     {
       name: 'AES-GCM',
-      iv: iv
+      iv: iv as Uint8Array<ArrayBuffer>
     },
     key,
-    data
+    data as Uint8Array<ArrayBuffer>
   );
 
   return {
@@ -63,10 +63,10 @@ export async function decrypt(
     const plainBuffer = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
-        iv: iv
+        iv: iv as Uint8Array<ArrayBuffer>
       },
       key,
-      ciphertext
+      ciphertext as Uint8Array<ArrayBuffer>
     );
 
     return bytesToString(new Uint8Array(plainBuffer));
@@ -112,10 +112,10 @@ export async function decryptToBytes(
     const plainBuffer = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
-        iv: iv
+        iv: iv as Uint8Array<ArrayBuffer>
       },
       key,
-      ciphertext
+      ciphertext as Uint8Array<ArrayBuffer>
     );
 
     return new Uint8Array(plainBuffer);

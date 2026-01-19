@@ -332,7 +332,7 @@
 }
 
 .message.other .message-bubble {
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
   border-bottom-left-radius: 0.25rem;
 }
 

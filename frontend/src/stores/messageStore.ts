@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import { saveMessage, loadMessages } from '../services/storage';
+import { loadMessages } from '../services/storage';
 import type { EncryptedData, MessagePayload } from '../types/crypto';
 
 interface Message {
@@ -53,7 +53,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       const stored = await loadMessages(threadId, 100);
       const messages: Message[] = [];
 
-      for (const { id, encrypted, createdAt } of stored) {
+      for (const { id, encrypted } of stored) {
         try {
           const plaintext = await decryptFn(encrypted);
           const payload: MessagePayload = JSON.parse(plaintext);
