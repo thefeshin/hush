@@ -32,6 +32,12 @@ class ConfigManager:
 
     def write_env(self, config, secrets):
         """Write .env file with all configuration"""
+        # Determine DATABASE_URL based on deployment mode
+        if config.get('deployment_mode') == 'local':
+            database_url = "postgresql://hush:hush@localhost:5432/hush"
+        else:
+            database_url = "postgresql://hush:hush@postgres:5432/hush"
+
         content = f"""# HUSH Vault Configuration
 # Generated at deployment - DO NOT EDIT MANUALLY
 
@@ -48,7 +54,7 @@ PANIC_MODE={str(config['panic_mode']).lower()}
 PERSIST_VAULT={str(config['persist_vault']).lower()}
 
 # Database
-DATABASE_URL=postgresql://hush:hush@postgres:5432/hush
+DATABASE_URL={database_url}
 
 # Application
 BACKEND_HOST=0.0.0.0

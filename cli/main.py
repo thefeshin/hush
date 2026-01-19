@@ -170,6 +170,9 @@ def main():
         print("\nThis is the only command. It does everything.")
         sys.exit(1)
 
+    # Check for --skip-env-check flag (used when shell script already handled the prompt)
+    skip_env_check = '--skip-env-check' in sys.argv
+
     # Run prerequisite setup (dependencies + SSL certs)
     if not run_setup():
         sys.exit(1)
@@ -179,9 +182,9 @@ def main():
 
     print_banner()
 
-    # Check for existing deployment
+    # Check for existing deployment (unless shell script already handled it)
     config_manager = ConfigManager()
-    if config_manager.env_exists():
+    if not skip_env_check and config_manager.env_exists():
         if not handle_existing_deployment(config_manager, ConfigManager):
             sys.exit(0)
 

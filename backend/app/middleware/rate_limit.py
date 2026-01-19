@@ -91,3 +91,10 @@ auth_rate_limiter = RateLimiter(RateLimitConfig(
     requests_per_minute=10,  # Very limited auth attempts
     burst_size=3
 ))
+
+
+def log_rate_limited(ip: str):
+    """Log when an IP is rate limited"""
+    import logging
+    logger = logging.getLogger("hush.security")
+    logger.warning(f"Rate limited: {ip}")

@@ -40,17 +40,21 @@ export function Login({ onSuccess }: Props) {
     }
 
     try {
+      console.log('[Login] Starting authentication...');
       // Authenticate with server
       const { kdfSalt } = await login(words);
+      console.log('[Login] Authentication successful, unlocking vault...');
 
       // Derive vault key locally
       await unlockVault(words, kdfSalt);
+      console.log('[Login] Vault unlocked, calling onSuccess');
 
       // Clear sensitive input
       setWords('');
 
       onSuccess();
     } catch (err) {
+      console.error('[Login] Login failed:', err);
       // Error is already set in store
     }
   };

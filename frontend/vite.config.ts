@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
 
 export default defineConfig({
   plugins: [
+    wasm(),
+    topLevelAwait(),
     react(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -31,8 +35,10 @@ export default defineConfig({
     })
   ],
   server: {
-    host: '0.0.0.0',
-    port: 5173,
+    host: 'localhost',
+    port: 3000,
+    strictPort: false,
+    open: false,
     proxy: {
       '/api': 'http://localhost:8000',
       '/ws': {
@@ -44,5 +50,15 @@ export default defineConfig({
   build: {
     target: 'esnext',
     sourcemap: false // No sourcemaps in production
+  },
+  optimizeDeps: {
+    exclude: ['argon2-browser'],
+    esbuildOptions: {
+      target: 'esnext'
+    }
+  },
+  worker: {
+    format: 'es',
+    plugins: () => [wasm(), topLevelAwait()]
   }
 });

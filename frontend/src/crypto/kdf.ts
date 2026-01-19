@@ -3,7 +3,6 @@
  * This derives the master vault key from the 12-word passphrase
  */
 
-import argon2 from 'argon2-browser';
 import { base64ToBytes } from './encoding';
 import { normalizeWords } from './normalize';
 import type { KeyMaterial, KdfParams, VaultKey } from '../types/crypto';
@@ -16,6 +15,41 @@ const DEFAULT_KDF_PARAMS: Omit<KdfParams, 'salt'> = {
   hashLength: 32      // 256 bits for AES-256
 };
 
+// Argon2id type value (2)
+const ARGON2ID_TYPE = 2;
+
+// Load argon2-bundled.min.js which creates window.argon2
+let argon2LoadPromise: Promise<any> | null = null;
+
+async function loadArgon2(): Promise<any> {
+  // Return cached promise if already loading/loaded
+  if (argon2LoadPromise) {
+    return argon2LoadPromise;
+  }
+
+  // Check if already loaded (e.g., via script tag in HTML)
+  if ((window as any).argon2) {
+    return (window as any).argon2;
+  }
+
+  // Load the bundled script
+  argon2LoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '/argon2-bundled.min.js';
+    script.onload = () => {
+      if ((window as any).argon2) {
+        resolve((window as any).argon2);
+      } else {
+        reject(new Error('argon2 not found after script load'));
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load argon2 script'));
+    document.head.appendChild(script);
+  });
+
+  return argon2LoadPromise;
+}
+
 /**
  * Derive the vault key from 12 words and salt
  *
@@ -27,22 +61,29 @@ export async function deriveVaultKey(
   words: string,
   saltBase64: string
 ): Promise<VaultKey> {
+  // Load argon2 library
+  const argon2 = await loadArgon2();
+
   // Normalize the words
   const normalized = normalizeWords(words);
 
   // Decode salt
   const salt = base64ToBytes(saltBase64);
 
+  console.log('[KDF] About to hash with argon2');
+
   // Derive key using Argon2id
   const result = await argon2.hash({
     pass: normalized,
     salt: salt,
-    type: argon2.ArgonType.Argon2id,
+    type: ARGON2ID_TYPE,
     mem: DEFAULT_KDF_PARAMS.memory,
     time: DEFAULT_KDF_PARAMS.iterations,
     parallelism: DEFAULT_KDF_PARAMS.parallelism,
     hashLen: DEFAULT_KDF_PARAMS.hashLength
   });
+
+  console.log('[KDF] Argon2 hash complete');
 
   // Get raw key bytes
   const rawKey = new Uint8Array(result.hash);

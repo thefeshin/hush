@@ -51,12 +51,15 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   // Unlock vault with 12 words
   const unlockVault = useCallback(async (words: string, salt: string) => {
+    console.log('[CryptoContext] Unlocking vault...');
     const key = await deriveVaultKey(words, salt);
+    console.log('[CryptoContext] Vault key derived');
     const idKey = await deriveIdentityKey(key);
     const ctKey = await deriveContactsKey(key);
     setVaultKey(key);
     setIdentityKey(idKey);
     setContactsKey(ctKey);
+    console.log('[CryptoContext] Vault unlocked, isUnlocked = true');
   }, []);
 
   // Lock vault and clear keys

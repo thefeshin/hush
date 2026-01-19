@@ -37,10 +37,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   // Login action
   login: async (words: string) => {
+    console.log('[AuthStore] Starting login...');
     set({ isLoading: true, error: null });
 
     try {
       const response = await authenticate(words);
+      console.log('[AuthStore] Authentication response received');
 
       set({
         isAuthenticated: true,
@@ -48,6 +50,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         token: response.token,
         kdfSalt: response.kdf_salt
       });
+      console.log('[AuthStore] Auth state updated, isAuthenticated = true');
 
       // Set up token refresh timer
       const refreshTime = (response.expires_in - 60) * 1000; // 1 min before expiry
@@ -65,6 +68,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ? error.message
         : 'Connection failed';
 
+      console.error('[AuthStore] Login error:', message);
       set({
         isLoading: false,
         error: message

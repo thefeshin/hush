@@ -10,13 +10,13 @@
     "lint": "eslint . --ext ts,tsx"
   },
   "dependencies": {
+    "argon2-browser": "^1.18.0",
+    "idb": "^8.0.0",
+    "qrcode.react": "^3.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.0",
-    "argon2-browser": "^1.18.0",
-    "zustand": "^4.4.7",
-    "idb": "^8.0.0",
-    "qrcode.react": "^3.1.0"
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
@@ -24,6 +24,8 @@
     "@vitejs/plugin-react": "^4.2.1",
     "typescript": "^5.2.2",
     "vite": "^5.0.8",
-    "vite-plugin-pwa": "^0.17.4"
+    "vite-plugin-pwa": "^0.17.4",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.5.0"
   }
 }
