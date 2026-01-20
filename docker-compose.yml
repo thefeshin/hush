@@ -36,7 +36,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     volumes:
-      - frontend_dist:/app/dist
+      - frontend_dist:/app/dist-volume
     networks:
       - hush_network
 
