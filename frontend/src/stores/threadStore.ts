@@ -25,7 +25,7 @@ interface ThreadState {
     myUUID: string,
     contacts: Array<{ uuid: string; displayName: string }>,
     computeThreadId: (uuid1: string, uuid2: string) => Promise<string>,
-    decryptFn: (encrypted: EncryptedData) => Promise<any>
+    decryptFn: (encrypted: EncryptedData) => Promise<ThreadMetadata>
   ) => Promise<void>;
   createThread: (
     myUUID: string,
@@ -33,7 +33,7 @@ interface ThreadState {
     otherUUID: string,
     otherName: string,
     computeThreadId: (uuid1: string, uuid2: string) => Promise<string>,
-    encryptFn: (data: any) => Promise<EncryptedData>
+    encryptFn: (data: ThreadMetadata) => Promise<EncryptedData>
   ) => Promise<Thread>;
   setActiveThread: (threadId: string | null) => void;
   updateLastMessage: (threadId: string, timestamp: number) => void;

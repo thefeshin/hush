@@ -26,8 +26,8 @@
 | Document | Description |
 |----------|-------------|
 | [PRODUCTION_CHECKLIST.md](./deployment/PRODUCTION_CHECKLIST.md) | Pre-flight checklist for production |
-| DOCKER_DEPLOYMENT.md | Docker setup guide (coming soon) |
-| SSL_SETUP.md | Let's Encrypt / TLS configuration (coming soon) |
+| [DOCKER_DEPLOYMENT.md](./deployment/DOCKER_DEPLOYMENT.md) | Docker setup and management guide |
+| [SSL_SETUP.md](./deployment/SSL_SETUP.md) | SSL/TLS certificate configuration |
 
 ---
 
@@ -36,7 +36,7 @@
 | Document | Description |
 |----------|-------------|
 | [BACKUP_RESTORE.md](./operations/BACKUP_RESTORE.md) | Database backup and restore procedures |
-| TROUBLESHOOTING.md | Common issues and solutions (coming soon) |
+| [TROUBLESHOOTING.md](./operations/TROUBLESHOOTING.md) | Common issues and solutions |
 
 ---
 
@@ -48,9 +48,12 @@ docs/
 ├── architecture/
 │   └── SYSTEM_DESIGN.md         # System architecture
 ├── deployment/
-│   └── PRODUCTION_CHECKLIST.md  # Production checklist
+│   ├── PRODUCTION_CHECKLIST.md  # Production checklist
+│   ├── DOCKER_DEPLOYMENT.md     # Docker guide
+│   └── SSL_SETUP.md             # SSL/TLS guide
 └── operations/
-    └── BACKUP_RESTORE.md        # Backup procedures
+    ├── BACKUP_RESTORE.md        # Backup procedures
+    └── TROUBLESHOOTING.md       # Troubleshooting guide
 ```
 
 ---

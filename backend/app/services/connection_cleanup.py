@@ -11,7 +11,7 @@ from app.services.websocket import ws_manager
 logger = logging.getLogger("hush.cleanup")
 
 
-async def cleanup_stale_connections(max_idle_hours: int = 24):
+async def cleanup_stale_connections(max_idle_hours: int = 24) -> None:
     """
     Periodically clean up connections that have been idle too long
     Runs as a background task
@@ -42,7 +42,7 @@ async def cleanup_stale_connections(max_idle_hours: int = 24):
             logger.error(f"Cleanup task error: {type(e).__name__}")
 
 
-async def start_cleanup_task():
+async def start_cleanup_task() -> None:
     """Start the cleanup background task"""
     asyncio.create_task(cleanup_stale_connections())
     logger.info("Connection cleanup task started")

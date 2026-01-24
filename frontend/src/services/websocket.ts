@@ -192,7 +192,7 @@ export class WebSocketService {
       }
 
       // Generate temporary ID for tracking
-      const tempId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const tempId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
       // Store callback
       this.pendingMessages.set(tempId, {

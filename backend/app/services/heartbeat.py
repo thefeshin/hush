@@ -11,7 +11,7 @@ from app.services.websocket import ws_manager
 logger = logging.getLogger("hush.heartbeat")
 
 
-async def send_heartbeats(interval_seconds: int = 30):
+async def send_heartbeats(interval_seconds: int = 30) -> None:
     """
     Send periodic pings to all connections
     Dead connections are cleaned up
@@ -46,7 +46,7 @@ async def send_heartbeats(interval_seconds: int = 30):
             logger.error(f"Heartbeat task error: {type(e).__name__}")
 
 
-async def start_heartbeat_task():
+async def start_heartbeat_task() -> None:
     """Start the heartbeat background task"""
     asyncio.create_task(send_heartbeats())
     logger.info("Heartbeat task started")

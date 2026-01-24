@@ -14,16 +14,22 @@ interface Contact {
   addedAt: number;
 }
 
+interface ContactData {
+  displayName: string;
+  notes?: string;
+  addedAt: number;
+}
+
 interface ContactState {
   contacts: Contact[];
   isLoading: boolean;
 
   // Actions
-  loadAllContacts: (decryptFn: (encrypted: EncryptedData) => Promise<any>) => Promise<void>;
+  loadAllContacts: (decryptFn: (encrypted: EncryptedData) => Promise<ContactData>) => Promise<void>;
   addContact: (
     uuid: string,
     displayName: string,
-    encryptFn: (data: any) => Promise<EncryptedData>
+    encryptFn: (data: ContactData) => Promise<EncryptedData>
   ) => Promise<void>;
   removeContact: (uuid: string) => Promise<void>;
   getContact: (uuid: string) => Contact | undefined;

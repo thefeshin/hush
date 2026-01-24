@@ -34,7 +34,6 @@ jobs:
 
       - name: Type check with MyPy
         run: mypy app --ignore-missing-imports
-        continue-on-error: true  # Non-blocking until types are fully annotated
 
   backend-test:
     name: Backend Tests
@@ -80,7 +79,6 @@ jobs:
           KDF_SALT: dGVzdF9zYWx0
           JWT_SECRET: test_jwt_secret_for_ci
         run: pytest -v --tb=short
-        continue-on-error: true  # Non-blocking until tests are added
 
   frontend-lint:
     name: Frontend Lint & Build
@@ -104,11 +102,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true  # Non-blocking for initial setup
 
       - name: Type check
         run: npm run type-check
-        continue-on-error: true  # Non-blocking for initial setup
 
       - name: Build
         run: npm run build

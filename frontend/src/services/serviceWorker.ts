@@ -2,6 +2,15 @@
  * Service worker registration and update handling
  */
 
+// Background Sync API types
+interface SyncManager {
+  register(tag: string): Promise<void>;
+}
+
+interface ServiceWorkerRegistrationWithSync extends ServiceWorkerRegistration {
+  sync?: SyncManager;
+}
+
 type UpdateCallback = () => void;
 
 let updateCallback: UpdateCallback | null = null;
@@ -79,9 +88,10 @@ export async function checkForUpdates(): Promise<void> {
  * Request background sync
  */
 export async function requestSync(tag: string): Promise<void> {
-  if (registration && 'sync' in registration) {
+  const reg = registration as ServiceWorkerRegistrationWithSync | null;
+  if (reg?.sync) {
     try {
-      await (registration as any).sync.register(tag);
+      await reg.sync.register(tag);
     } catch (error) {
       console.error('Background sync registration failed:', error);
     }

@@ -7,6 +7,34 @@ import { base64ToBytes } from './encoding';
 import { normalizeWords } from './normalize';
 import type { KeyMaterial, KdfParams, VaultKey } from '../types/crypto';
 
+// Argon2 library interface
+interface Argon2HashOptions {
+  pass: string;
+  salt: Uint8Array;
+  type: number;
+  mem: number;
+  time: number;
+  parallelism: number;
+  hashLen: number;
+}
+
+interface Argon2HashResult {
+  hash: Uint8Array;
+  hashHex: string;
+  encoded: string;
+}
+
+interface Argon2Library {
+  hash(options: Argon2HashOptions): Promise<Argon2HashResult>;
+}
+
+// Extend Window interface for argon2
+declare global {
+  interface Window {
+    argon2?: Argon2Library;
+  }
+}
+
 // Fixed KDF parameters (must match server expectations)
 const DEFAULT_KDF_PARAMS: Omit<KdfParams, 'salt'> = {
   memory: 65536,      // 64 MB
@@ -19,17 +47,17 @@ const DEFAULT_KDF_PARAMS: Omit<KdfParams, 'salt'> = {
 const ARGON2ID_TYPE = 2;
 
 // Load argon2-bundled.min.js which creates window.argon2
-let argon2LoadPromise: Promise<any> | null = null;
+let argon2LoadPromise: Promise<Argon2Library> | null = null;
 
-async function loadArgon2(): Promise<any> {
+async function loadArgon2(): Promise<Argon2Library> {
   // Return cached promise if already loading/loaded
   if (argon2LoadPromise) {
     return argon2LoadPromise;
   }
 
   // Check if already loaded (e.g., via script tag in HTML)
-  if ((window as any).argon2) {
-    return (window as any).argon2;
+  if (window.argon2) {
+    return window.argon2;
   }
 
   // Load the bundled script
@@ -37,8 +65,8 @@ async function loadArgon2(): Promise<any> {
     const script = document.createElement('script');
     script.src = '/argon2-bundled.min.js';
     script.onload = () => {
-      if ((window as any).argon2) {
-        resolve((window as any).argon2);
+      if (window.argon2) {
+        resolve(window.argon2);
       } else {
         reject(new Error('argon2 not found after script load'));
       }

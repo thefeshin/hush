@@ -9,6 +9,11 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+// iOS Safari standalone mode check
+interface NavigatorStandalone extends Navigator {
+  standalone?: boolean;
+}
+
 interface UseInstallPromptReturn {
   canInstall: boolean;
   isInstalled: boolean;
@@ -23,7 +28,7 @@ export function useInstallPrompt(): UseInstallPromptReturn {
     // Check if already installed
     const checkInstalled = () => {
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-      const isIOSStandalone = (navigator as any).standalone === true;
+      const isIOSStandalone = (navigator as NavigatorStandalone).standalone === true;
       setIsInstalled(isStandalone || isIOSStandalone);
     };
 

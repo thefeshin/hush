@@ -100,7 +100,7 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"WebSocket cleaned up. Total: {ws_manager.connection_count}")
 
 
-async def handle_subscribe(websocket: WebSocket, data: dict):
+async def handle_subscribe(websocket: WebSocket, data: dict) -> None:
     """Handle thread subscription request"""
     thread_id = data.get("thread_id")
 
@@ -129,7 +129,7 @@ async def handle_subscribe(websocket: WebSocket, data: dict):
     })
 
 
-async def handle_unsubscribe(websocket: WebSocket, data: dict):
+async def handle_unsubscribe(websocket: WebSocket, data: dict) -> None:
     """Handle thread unsubscription request"""
     thread_id = data.get("thread_id")
 
@@ -144,7 +144,7 @@ async def handle_unsubscribe(websocket: WebSocket, data: dict):
     })
 
 
-async def handle_message(websocket: WebSocket, data: dict, pool):
+async def handle_message(websocket: WebSocket, data: dict, pool) -> None:
     """
     Handle incoming message (encrypted blob)
     1. Validate required fields

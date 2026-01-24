@@ -81,7 +81,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             return request.client.host
         return "unknown"
 
-    async def _check_ip_blocked(self, conn, ip: str) -> bool:
+    async def _check_ip_blocked(self, conn, ip: str) -> bool:  # type: ignore[no-untyped-def]
         """Check if IP is blocked"""
         row = await conn.fetchrow("""
             SELECT expires_at FROM blocked_ips WHERE ip_address = $1
@@ -103,7 +103,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Expired - will be cleaned up by periodic cleanup
         return False
 
-    async def _cleanup_expired_blocks(self, conn):
+    async def _cleanup_expired_blocks(self, conn) -> None:  # type: ignore[no-untyped-def]
         """Clean up expired IP blocks (runs periodically)"""
         # Only run cleanup occasionally to avoid overhead
         import random

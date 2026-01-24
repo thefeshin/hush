@@ -48,7 +48,7 @@ export async function queueMessage(
   encrypted: EncryptedData,
   payload: string
 ): Promise<string> {
-  const id = `queued-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const id = `queued-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
   const database = await getDB();
   await database.put('queue', {
