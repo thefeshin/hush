@@ -1,0 +1,33 @@
+# Development overrides for docker-compose.yml
+#
+# This file is automatically loaded by docker-compose and overrides
+# settings from docker-compose.yml for local development.
+#
+# To use production settings only, run:
+#   docker-compose -f docker-compose.yml up
+#
+# For development (this is the default):
+#   docker-compose up
+
+version: '3.8'
+
+services:
+  postgres:
+    # Expose PostgreSQL for local development tools
+    ports:
+      - "5432:5432"
+
+  backend:
+    # Enable hot reload for development
+    volumes:
+      - ./backend:/app
+    environment:
+      - LOG_FORMAT=text
+    # Override command for development with auto-reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  nginx:
+    # Use HTTP for local development (no SSL cert required)
+    # Comment out if you have local SSL certs
+    # ports:
+    #   - "8080:80"
