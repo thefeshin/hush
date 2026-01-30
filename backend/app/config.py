@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+    # Multi-user auth settings
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    VAULT_TOKEN_EXPIRE_MINUTES: int = 5
+    PASSWORD_MIN_LENGTH: int = 8
+
     # Security Policy (set at deployment)
     MAX_AUTH_FAILURES: int = 5
     FAILURE_MODE: str = "ip_temp"  # ip_temp, ip_perm, db_wipe, db_wipe_shutdown

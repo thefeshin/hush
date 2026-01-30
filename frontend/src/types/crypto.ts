@@ -65,3 +65,8 @@ export interface ContactPayload {
   display_name: string;
   added_at: number;
 }
+
+// Local device settings (NOT synced to server, stored in IndexedDB)
+export interface DeviceSettings {
+  pinEnabled: boolean;  // User's PIN preference for this device
+}

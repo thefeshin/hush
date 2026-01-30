@@ -93,7 +93,7 @@ export async function deriveVaultKey(
     'raw',
     rawKey,
     { name: 'HKDF' },
-    false, // not extractable
+    false, // KDF keys must be non-extractable
     ['deriveKey', 'deriveBits']
   );
 

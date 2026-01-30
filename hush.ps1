@@ -275,8 +275,7 @@ print()
 print('LOGIN WORDS (SAVE THESE - NOT RECOVERABLE):')
 print()
 words = secrets['words']
-for i in range(0, 12, 3):
-    print(f'  {i+1:2}. {words[i]:<12}  {i+2:2}. {words[i+1]:<12}  {i+3:2}. {words[i+2]:<12}')
+print(' '.join(words))
 print()
 print('=' * 60)
 print('  WRITE THESE WORDS DOWN. THEY WILL NOT BE SHOWN AGAIN.')

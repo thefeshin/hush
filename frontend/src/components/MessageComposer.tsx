@@ -14,15 +14,15 @@ import type { MessagePayload } from '../types/crypto';
 
 interface Props {
   threadId: string;
-  participantUUID: string;
+  participantId: string;
 }
 
-export function MessageComposer({ threadId, participantUUID }: Props) {
+export function MessageComposer({ threadId, participantId }: Props) {
   const [content, setContent] = useState('');
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const identity = useAuthStore(state => state.identity);
+  const user = useAuthStore(state => state.user);
   const { addPendingMessage, markMessageSent, markMessageFailed } = useMessageStore();
   const { updateLastMessage } = useThreadStore();
   const { getThreadKey, encryptMessage } = useCrypto();
@@ -51,7 +51,7 @@ export function MessageComposer({ threadId, participantUUID }: Props) {
     e.preventDefault();
 
     const trimmedContent = content.trim();
-    if (!trimmedContent || !identity || isSending) return;
+    if (!trimmedContent || !user || isSending) return;
 
     setIsSending(true);
     setContent('');
@@ -60,15 +60,15 @@ export function MessageComposer({ threadId, participantUUID }: Props) {
     const tempId = addPendingMessage(
       threadId,
       trimmedContent,
-      identity.userId,
-      identity.displayName
+      user.id,
+      user.username
     );
 
     try {
       // Create message payload
       const payload: MessagePayload = {
-        sender_id: identity.userId,
-        sender_name: identity.displayName,
+        sender_id: user.id,
+        sender_name: user.username,
         content: trimmedContent,
         timestamp: Date.now()
       };
@@ -76,7 +76,7 @@ export function MessageComposer({ threadId, participantUUID }: Props) {
       const payloadString = JSON.stringify(payload);
 
       // Get thread key and encrypt
-      const threadKey = await getThreadKey(identity.userId, participantUUID);
+      const threadKey = await getThreadKey(user.id, participantId);
       const encrypted = await encryptMessage(threadKey, payloadString);
 
       if (isConnected) {

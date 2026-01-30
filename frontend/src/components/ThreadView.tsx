@@ -16,7 +16,7 @@ interface Props {
 }
 
 export function ThreadView({ threadId }: Props) {
-  const identity = useAuthStore(state => state.identity);
+  const user = useAuthStore(state => state.user);
   const { getThread } = useThreadStore();
   const { loadMessagesForThread, getMessages } = useMessageStore();
   const { getThreadKey, decryptMessage } = useCrypto();
@@ -29,15 +29,15 @@ export function ThreadView({ threadId }: Props) {
 
   // Load messages when thread changes
   useEffect(() => {
-    if (identity && thread) {
+    if (user && thread) {
       loadThreadMessages();
     }
-  }, [threadId, identity, thread]);
+  }, [threadId, user, thread]);
 
   const loadThreadMessages = async () => {
-    if (!identity || !thread) return;
+    if (!user || !thread) return;
 
-    const threadKey = await getThreadKey(identity.userId, thread.participantUUID);
+    const threadKey = await getThreadKey(user.id, thread.participantId);
 
     await loadMessagesForThread(threadId, async (encrypted) => {
       return decryptMessage(threadKey, encrypted);
@@ -52,22 +52,22 @@ export function ThreadView({ threadId }: Props) {
     <div className="thread-view">
       <div className="thread-header">
         <div className="thread-avatar large">
-          {thread.participantName[0].toUpperCase()}
+          {thread.participantUsername[0].toUpperCase()}
         </div>
         <div className="thread-title">
-          <h2>{thread.participantName}</h2>
-          <span className="thread-uuid">{thread.participantUUID.slice(0, 8)}...</span>
+          <h2>{thread.participantUsername}</h2>
+          <span className="thread-uuid">{thread.participantId.slice(0, 8)}...</span>
         </div>
       </div>
 
       <MessageList
         messages={messages}
-        currentUserId={identity?.userId || ''}
+        currentUserId={user?.id || ''}
       />
 
       <MessageComposer
         threadId={threadId}
-        participantUUID={thread.participantUUID}
+        participantId={thread.participantId}
       />
     </div>
   );

@@ -1,35 +1,38 @@
 /**
- * Sidebar with contacts and threads
+ * Sidebar with contacts and conversations
  */
 
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
-import { useContactStore } from '../stores/contactStore';
-import { useThreadStore } from '../stores/threadStore';
+import { useContactStore, Contact } from '../stores/contactStore';
+import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { clearAllData } from '../services/storage';
 import { wsService } from '../services/websocket';
 import { AddContactModal } from './AddContactModal';
-import { UUIDShare } from './UUIDShare';
 import { ConnectionStatus } from './ConnectionStatus';
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate: (page: 'chat' | 'settings') => void;
+}
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [activeTab, setActiveTab] = useState<'chats' | 'contacts'>('chats');
 
-  const identity = useAuthStore(state => state.identity);
+  const user = useAuthStore(state => state.user);
   const { logout } = useAuthStore();
   const { lockVault } = useCrypto();
 
-  const { threads, activeThreadId, setActiveThread } = useThreadStore();
+  const { conversations, activeConversationId, setActiveConversation } = useConversationStore();
   const { contacts } = useContactStore();
 
   const handleLogout = async () => {
     wsService.disconnect();
     await clearAllData();
-    lockVault();
-    logout();
+    await lockVault();  // lockVault is now async
+    await logout();
   };
 
   const formatTime = (timestamp: number) => {
@@ -67,9 +70,24 @@ export function Sidebar() {
         </div>
       </div>
 
-      {showProfile && (
+      {showProfile && user && (
         <div className="profile-panel">
-          <UUIDShare />
+          <div className="profile-info">
+            <div className="profile-avatar">
+              {user.username.charAt(0).toUpperCase()}
+            </div>
+            <div className="profile-details">
+              <span className="profile-username">{user.username}</span>
+              <span className="profile-id">{user.id.slice(0, 8)}...</span>
+            </div>
+            <button
+              onClick={() => onNavigate('settings')}
+              className="settings-link"
+              title="Settings"
+            >
+              &#9881;
+            </button>
+          </div>
         </div>
       )}
 
@@ -91,27 +109,29 @@ export function Sidebar() {
       <div className="sidebar-content">
         {activeTab === 'chats' && (
           <div className="thread-list">
-            {threads.length === 0 ? (
+            {conversations.length === 0 ? (
               <div className="empty-list">
                 <p>No conversations yet</p>
                 <p className="hint">Add a contact to start chatting</p>
               </div>
             ) : (
-              threads.map(thread => (
+              conversations.map(conversation => (
                 <div
-                  key={thread.threadId}
-                  className={`thread-item ${thread.threadId === activeThreadId ? 'active' : ''}`}
-                  onClick={() => setActiveThread(thread.threadId)}
+                  key={conversation.conversationId}
+                  className={`thread-item ${conversation.conversationId === activeConversationId ? 'active' : ''}`}
+                  onClick={() => setActiveConversation(conversation.conversationId)}
                 >
                   <div className="thread-avatar">
-                    {thread.participantName[0].toUpperCase()}
+                    {conversation.participantUsername[0].toUpperCase()}
                   </div>
                   <div className="thread-info">
-                    <div className="thread-name">{thread.participantName}</div>
-                    <div className="thread-time">{formatTime(thread.lastMessageAt)}</div>
+                    <div className="thread-name">
+                      {conversation.participantUsername === 'Unknown' ? 'Unknown Contact' : conversation.participantUsername}
+                    </div>
+                    <div className="thread-time">{formatTime(conversation.lastMessageAt)}</div>
                   </div>
-                  {thread.unreadCount > 0 && (
-                    <div className="unread-badge">{thread.unreadCount}</div>
+                  {conversation.unreadCount > 0 && (
+                    <div className="unread-badge">{conversation.unreadCount}</div>
                   )}
                 </div>
               ))
@@ -131,14 +151,14 @@ export function Sidebar() {
             {contacts.length === 0 ? (
               <div className="empty-list">
                 <p>No contacts yet</p>
-                <p className="hint">Add someone by their UUID</p>
+                <p className="hint">Add someone by their username</p>
               </div>
             ) : (
               contacts.map(contact => (
                 <ContactItem
-                  key={contact.uuid}
+                  key={contact.id}
                   contact={contact}
-                  identity={identity!}
+                  user={user!}
                 />
               ))
             )}
@@ -156,36 +176,43 @@ export function Sidebar() {
 // Contact item with ability to start chat
 function ContactItem({
   contact,
-  identity
+  user
 }: {
-  contact: { uuid: string; displayName: string };
-  identity: { userId: string; displayName: string };
+  contact: Contact;
+  user: { id: string; username: string };
 }) {
-  const { createThread } = useThreadStore();
+  const { getOrCreateConversation } = useConversationStore();
   const { getThreadId, encryptIdentity } = useCrypto();
-  const token = useAuthStore(state => state.token);
 
   const handleStartChat = async () => {
-    const thread = await createThread(
-      identity.userId,
-      identity.displayName,
-      contact.uuid,
-      contact.displayName,
+    const conversation = await getOrCreateConversation(
+      user.id,
+      user.username,
+      contact.id,
+      contact.username,
       getThreadId,
       encryptIdentity
     );
 
     // Also create thread on server if it was newly created
-    if (token && thread) {
+    if (conversation) {
       try {
         const { getSyncService } = await import('../services/sync');
-        const syncService = getSyncService(token);
+        const syncService = getSyncService();
         const encrypted = await encryptIdentity({
-          participants: [identity.userId, contact.uuid].sort(),
-          created_by: { user_id: identity.userId, display_name: identity.displayName },
-          created_at: thread.createdAt
+          participants: [user.id, contact.id].sort(),
+          created_by: { user_id: user.id, display_name: user.username },
+          created_at: conversation.createdAt
         });
-        await syncService.createThread(thread.threadId, encrypted);
+
+        // Sort participant IDs for thread_participants table
+        const sortedParticipants = [user.id, contact.id].sort();
+        await syncService.createThread(
+          conversation.conversationId,
+          encrypted,
+          sortedParticipants[0], // participant_1 (lower UUID)
+          sortedParticipants[1]  // participant_2 (higher UUID)
+        );
       } catch (err) {
         // Thread might already exist on server, that's ok
         console.log('Thread may already exist on server');
@@ -196,11 +223,11 @@ function ContactItem({
   return (
     <div className="contact-item">
       <div className="contact-avatar">
-        {contact.displayName[0].toUpperCase()}
+        {contact.username[0].toUpperCase()}
       </div>
       <div className="contact-info">
-        <div className="contact-name">{contact.displayName}</div>
-        <div className="contact-uuid">{contact.uuid.slice(0, 8)}...</div>
+        <div className="contact-name">{contact.username}</div>
+        <div className="contact-uuid">{contact.id.slice(0, 8)}...</div>
       </div>
       <button
         className="start-chat-button"

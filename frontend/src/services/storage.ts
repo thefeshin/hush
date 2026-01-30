@@ -193,6 +193,19 @@ export async function loadThreads(): Promise<Array<{ threadId: string; encrypted
   }));
 }
 
+/**
+ * Load a single thread by ID
+ */
+export async function loadThread(threadId: string): Promise<{ encrypted: EncryptedData; lastMessageAt: number } | null> {
+  const record = await getDB().get('threads', threadId);
+  if (!record) return null;
+
+  return {
+    encrypted: { ciphertext: record.ciphertext, iv: record.iv },
+    lastMessageAt: record.lastMessageAt
+  };
+}
+
 // ==================== Message Operations ====================
 
 /**

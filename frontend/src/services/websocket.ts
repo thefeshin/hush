@@ -1,19 +1,21 @@
 /**
  * WebSocket service for real-time communication
- * Handles connection, reconnection, and message routing
+ * Uses cookie-based authentication (cookies sent automatically)
  */
 
 import type { EncryptedData } from '../types/crypto';
 
 // Message types from server
 interface ServerMessage {
-  type: 'subscribed' | 'unsubscribed' | 'message' | 'error' | 'heartbeat' | 'pong';
+  type: 'subscribed' | 'unsubscribed' | 'message' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed';
   thread_id?: string;
+  sender_id?: string;  // Sender's user ID (plaintext, for auto-discovery)
   id?: string;
   ciphertext?: string;
   iv?: string;
   created_at?: string;
   message?: string;
+  thread_count?: number;
 }
 
 // Message types to server
@@ -38,7 +40,12 @@ interface ClientPing {
   type: 'ping';
 }
 
-type ClientPayload = ClientSubscribe | ClientUnsubscribe | ClientMessage | ClientPing;
+interface ClientSubscribeUser {
+  type: 'subscribe_user';
+  user_id: string;
+}
+
+type ClientPayload = ClientSubscribe | ClientUnsubscribe | ClientMessage | ClientPing | ClientSubscribeUser;
 
 // Event handlers
 type MessageHandler = (msg: ServerMessage) => void;
@@ -54,7 +61,6 @@ export enum ConnectionState {
 
 export class WebSocketService {
   private ws: WebSocket | null = null;
-  private token: string | null = null;
   private url: string;
 
   // Connection state
@@ -89,20 +95,20 @@ export class WebSocketService {
   }
 
   /**
-   * Connect to WebSocket server
+   * Connect to WebSocket server (uses cookies for auth)
    */
-  connect(token: string): Promise<void> {
+  connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.state === ConnectionState.CONNECTED) {
         resolve();
         return;
       }
 
-      this.token = token;
       this.state = ConnectionState.CONNECTING;
 
       try {
-        this.ws = new WebSocket(`${this.url}?token=${token}`);
+        // No token needed - cookies are sent automatically
+        this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
           this.state = ConnectionState.CONNECTED;
@@ -257,6 +263,16 @@ export class WebSocketService {
     return Array.from(this.subscribedThreads);
   }
 
+  /**
+   * Subscribe to all threads for the current user
+   * This enables automatic discovery of threads from unknown contacts
+   */
+  subscribeToUser(userId: string): void {
+    if (this.state === ConnectionState.CONNECTED && this.ws) {
+      this.send({ type: 'subscribe_user', user_id: userId });
+    }
+  }
+
   // ==================== Private Methods ====================
 
   private send(payload: ClientPayload): void {
@@ -355,9 +371,7 @@ export class WebSocketService {
     this.notifyConnectionHandlers(false);
 
     this.reconnectTimer = setTimeout(() => {
-      if (this.token) {
-        this.connect(this.token).catch(console.error);
-      }
+      this.connect().catch(console.error);
     }, delay);
   }
 

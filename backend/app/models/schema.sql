@@ -44,6 +44,49 @@ CREATE TABLE IF NOT EXISTS auth_failures (
     last_failure_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Note: NO users table exists
--- User identity is client-side only, encrypted in IndexedDB
--- Server has zero knowledge of who is using the system
+-- Users table
+-- Stores registered users with hashed passwords
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_login TIMESTAMP WITH TIME ZONE
+);
+
+-- Refresh tokens table
+-- Stores hashed refresh tokens for secure session management
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    revoked BOOLEAN DEFAULT FALSE
+);
+
+-- Indexes for users table
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+-- Indexes for refresh tokens
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
+
+-- Thread participants table
+-- Stores plaintext participant UUIDs for thread discovery
+-- This allows users to discover all threads they're part of without decrypting metadata
+CREATE TABLE IF NOT EXISTS thread_participants (
+    thread_id UUID PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
+    participant_1 UUID NOT NULL,  -- Lower UUID (sorted)
+    participant_2 UUID NOT NULL,  -- Higher UUID (sorted)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for looking up threads by user ID
+CREATE INDEX IF NOT EXISTS idx_thread_participants_p1
+    ON thread_participants(participant_1)
+    WHERE participant_1 IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_thread_participants_p2
+    ON thread_participants(participant_2)
+    WHERE participant_2 IS NOT NULL;

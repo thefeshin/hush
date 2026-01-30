@@ -1,12 +1,13 @@
 /**
  * React hook for WebSocket functionality
+ * Uses cookie-based authentication
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { wsService, ConnectionState } from '../services/websocket';
 import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
-import { useThreadStore } from '../stores/threadStore';
+import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { saveMessage } from '../services/storage';
 import type { EncryptedData, MessagePayload } from '../types/crypto';
@@ -24,64 +25,102 @@ export function useWebSocket(): UseWebSocketReturn {
     wsService.getState()
   );
 
-  const token = useAuthStore(state => state.token);
-  const identity = useAuthStore(state => state.identity);
+  const { isAuthenticated, user } = useAuthStore();
   const { addMessage } = useMessageStore();
-  const { updateLastMessage } = useThreadStore();
-  const { getThreadKey, decryptMessage } = useCrypto();
+  const { updateLastMessage, incrementUnread, getConversation, addConversation } = useConversationStore();
+  const { getThreadKey, decryptMessage, isUnlocked } = useCrypto();
 
   // Track if we've set up handlers
   const handlersSetup = useRef(false);
 
-  // Connect when token is available
+  // Connect when authenticated (cookies will be sent automatically)
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated || !isUnlocked) {
       wsService.disconnect();
       return;
     }
 
-    wsService.connect(token).catch(console.error);
+    wsService.connect().catch(console.error);
 
     return () => {
       // Don't disconnect on unmount - keep connection alive
     };
-  }, [token]);
+  }, [isAuthenticated, isUnlocked]);
 
   // Handle incoming encrypted message
   const handleIncomingMessage = useCallback(async (
     id: string,
-    threadId: string,
+    conversationId: string,
     encrypted: EncryptedData,
+    senderId: string | undefined,
     createdAt?: string
   ) => {
-    if (!identity) return;
+    if (!user || !senderId) return;
 
     try {
-      // Get thread to find participant UUID
-      const thread = useThreadStore.getState().getThread(threadId);
-      if (!thread) {
-        console.warn('Received message for unknown thread:', threadId);
+      // Get conversation to find participant ID
+      const conversation = getConversation(conversationId);
+
+      // If we don't have this conversation, handle auto-discovery
+      if (!conversation) {
+        console.log('Received message for unknown conversation, attempting auto-discovery:', conversationId);
+
+        // Derive thread key and decrypt to get sender info
+        const threadKey = await getThreadKey(user.id, senderId);
+        const plaintext = await decryptMessage(threadKey, encrypted);
+        const payload: MessagePayload = JSON.parse(plaintext);
+
+        // Create new conversation entry
+        const newConversation = {
+          conversationId,
+          participantId: senderId,
+          participantUsername: payload.sender_name || 'Unknown',
+          createdAt: Date.now(),
+          lastMessageAt: payload.timestamp,
+          unreadCount: 1
+        };
+
+        addConversation(newConversation);
+
+        // Subscribe to this conversation
+        wsService.subscribe(conversationId);
+
+        // Save message and add to store (use threadId internally)
+        const timestamp = createdAt ? new Date(createdAt).getTime() : payload.timestamp;
+        await saveMessage(id, conversationId, encrypted, timestamp);
+
+        addMessage({
+          id,
+          threadId: conversationId,  // Use threadId for message store
+          senderId: payload.sender_id,
+          senderName: payload.sender_name,
+          content: payload.content,
+          timestamp: payload.timestamp,
+          status: 'sent'
+        });
+
+        updateLastMessage(conversationId, payload.timestamp);
         return;
       }
 
       // Derive thread key and decrypt
-      const threadKey = await getThreadKey(identity.userId, thread.participantUUID);
+      const threadKey = await getThreadKey(user.id, conversation.participantId);
       const plaintext = await decryptMessage(threadKey, encrypted);
       const payload: MessagePayload = JSON.parse(plaintext);
 
       // Don't add our own messages (we add them optimistically)
-      if (payload.sender_id === identity.userId) {
+      if (payload.sender_id === user.id) {
         return;
       }
 
       // Save to local storage
       const timestamp = createdAt ? new Date(createdAt).getTime() : payload.timestamp;
-      await saveMessage(id, threadId, encrypted, timestamp);
+      await saveMessage(id, conversationId, encrypted, timestamp);
 
-      // Add to message store
+      // Add to message store (use threadId internally)
       addMessage({
         id,
-        threadId,
+        threadId: conversationId,  // Use threadId for message store
         senderId: payload.sender_id,
         senderName: payload.sender_name,
         content: payload.content,
@@ -89,13 +128,16 @@ export function useWebSocket(): UseWebSocketReturn {
         status: 'sent'
       });
 
-      // Update thread's last message time
-      updateLastMessage(threadId, payload.timestamp);
+      // Update conversation's last message time
+      updateLastMessage(conversationId, payload.timestamp);
+
+      // Increment unread count if not the active conversation
+      incrementUnread(conversationId);
 
     } catch (error) {
       console.error('Failed to process incoming message:', error);
     }
-  }, [identity, getThreadKey, decryptMessage, addMessage, updateLastMessage]);
+  }, [user, getConversation, getThreadKey, decryptMessage, addMessage, updateLastMessage, incrementUnread, addConversation]);
 
   // Set up message and connection handlers
   useEffect(() => {
@@ -114,6 +156,7 @@ export function useWebSocket(): UseWebSocketReturn {
           msg.id,
           msg.thread_id,
           { ciphertext: msg.ciphertext, iv: msg.iv },
+          msg.sender_id,
           msg.created_at
         );
       }

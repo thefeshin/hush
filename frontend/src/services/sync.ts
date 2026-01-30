@@ -1,6 +1,6 @@
 /**
  * Sync service for fetching messages via REST API
- * Used when WebSocket is unavailable or for initial load
+ * Uses cookie-based authentication
  */
 
 import { createAuthenticatedFetch } from './api';
@@ -18,8 +18,8 @@ interface MessageFromServer {
 export class SyncService {
   private authFetch: ReturnType<typeof createAuthenticatedFetch>;
 
-  constructor(token: string) {
-    this.authFetch = createAuthenticatedFetch(token);
+  constructor() {
+    this.authFetch = createAuthenticatedFetch();
   }
 
   /**
@@ -46,19 +46,30 @@ export class SyncService {
 
   /**
    * Create a thread on the server
+   * Includes participant information for thread discovery
    */
   async createThread(
     threadId: string,
-    encrypted: EncryptedData
+    encrypted: EncryptedData,
+    participant1?: string,
+    participant2?: string
   ): Promise<void> {
+    const body: any = {
+      id: threadId,
+      ciphertext: encrypted.ciphertext,
+      iv: encrypted.iv
+    };
+
+    // Include participant info if provided (for thread discovery)
+    if (participant1 && participant2) {
+      body.participant_1 = participant1;
+      body.participant_2 = participant2;
+    }
+
     const response = await this.authFetch('/threads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: threadId,
-        ciphertext: encrypted.ciphertext,
-        iv: encrypted.iv
-      })
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -139,12 +150,12 @@ export class SyncService {
   }
 }
 
-// Create sync service instance
+// Create sync service instance (singleton)
 let syncServiceInstance: SyncService | null = null;
 
-export function getSyncService(token: string): SyncService {
+export function getSyncService(): SyncService {
   if (!syncServiceInstance) {
-    syncServiceInstance = new SyncService(token);
+    syncServiceInstance = new SyncService();
   }
   return syncServiceInstance;
 }

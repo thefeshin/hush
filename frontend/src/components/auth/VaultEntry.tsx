@@ -1,66 +1,91 @@
 /**
- * 12-word passphrase login screen
+ * Vault Entry - Step 1 of authentication
+ * Enter 12-word passphrase to verify vault access
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useAuthStore } from '../stores/authStore';
-import { useCrypto } from '../crypto/CryptoContext';
-import { validateWordCount } from '../crypto/normalize';
+import { validateWordCount } from '../../crypto/normalize';
+import { setSessionVaultKey } from '../../services/vaultStorage';
+import { deriveVaultKey } from '../../crypto/kdf';
+import type { VaultKey } from '../../types/crypto';
 
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (vaultToken: string, kdfSalt: string) => void;
+  isLoading?: boolean;
+  error?: string | null;
+  onClearError: () => void;
 }
 
-export function Login({ onSuccess }: Props) {
+export function VaultEntry({ onSuccess, isLoading = false, error, onClearError }: Props) {
   const [words, setWords] = useState('');
   const [showWords, setShowWords] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const { login, isLoading, error, clearError } = useAuthStore();
-  const { unlockVault } = useCrypto();
-
-  // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  // Clear error when words change
   useEffect(() => {
-    if (error) {
-      clearError();
+    if (error || localError) {
+      onClearError();
+      setLocalError(null);
     }
-  }, [words]);
+  }, [words, error, onClearError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate word count
     if (!validateWordCount(words)) {
+      setLocalError('Please enter exactly 12 words');
       return;
     }
 
+    setIsProcessing(true);
+    setLocalError(null);
+
     try {
-      console.log('[Login] Starting authentication...');
-      // Authenticate with server
-      const { kdfSalt } = await login(words);
-      console.log('[Login] Authentication successful, unlocking vault...');
+      const response = await fetch('/api/auth/vault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ words }),
+        credentials: 'include'
+      });
 
-      // Derive vault key locally
-      await unlockVault(words, kdfSalt);
-      console.log('[Login] Vault unlocked, calling onSuccess');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail?.message || 'Invalid passphrase');
+      }
 
-      // Clear sensitive input
+      const data = await response.json();
+
+      // Derive vault key from 12 words
+      const vaultKey: VaultKey = await deriveVaultKey(words, data.kdf_salt);
+
+      // Store KDF salt in sessionStorage for later PIN use
+      sessionStorage.setItem('vault_kdf_salt', data.kdf_salt);
+
+      // Set session key for current session convenience
+      await setSessionVaultKey(vaultKey);
+
+      // Clear sensitive words
       setWords('');
 
-      onSuccess();
+      // Return success with vault token and salt
+      onSuccess(data.vault_token, data.kdf_salt);
     } catch (err) {
-      console.error('[Login] Login failed:', err);
-      // Error is already set in store
+      setLocalError(err instanceof Error ? err.message : 'Authentication failed');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const wordCount = words.trim().split(/\s+/).filter(Boolean).length;
   const isValidCount = wordCount === 12;
+  const displayError = (error as string | null) || localError;
+  const finalIsLoading = isLoading || isProcessing;
 
   return (
     <div className="login-screen">
@@ -81,7 +106,7 @@ export function Login({ onSuccess }: Props) {
                 onChange={(e) => setWords(e.target.value)}
                 placeholder="word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12"
                 rows={3}
-                disabled={isLoading}
+                disabled={finalIsLoading}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -102,18 +127,18 @@ export function Login({ onSuccess }: Props) {
             </div>
           </div>
 
-          {error && (
+          {displayError && (
             <div className="error-message">
-              {error}
+              {displayError}
             </div>
           )}
 
           <button
             type="submit"
             className="primary-button"
-            disabled={isLoading || !isValidCount}
+            disabled={finalIsLoading || !isValidCount}
           >
-            {isLoading ? 'Unlocking...' : 'Unlock Vault'}
+            {isProcessing ? 'Setting up...' : finalIsLoading ? 'Verifying...' : 'Continue'}
           </button>
         </form>
 

@@ -1,57 +1,66 @@
 """
 Authentication dependencies for protected routes
+Supports cookie-based authentication
 """
 
 from typing import Optional
+from uuid import UUID
 
-from fastapi import Depends, HTTPException, status, WebSocket
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, status, WebSocket
 from jose import jwt, JWTError
 
 from app.config import settings
 
-# HTTP Bearer token extractor
-security = HTTPBearer()
+
+class AuthenticatedUser:
+    """Represents an authenticated user"""
+    def __init__(self, user_id: UUID, username: str):
+        self.user_id = user_id
+        self.username = username
 
 
-async def verify_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> dict:
+async def get_current_user(request: Request) -> AuthenticatedUser:
     """
-    Verify JWT token from Authorization header
+    Get current user from access_token cookie
     Used for REST API endpoints
     """
-    token = credentials.credentials
+    access_token = request.cookies.get("access_token")
+
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "not_authenticated", "message": "No access token"}
+        )
 
     try:
         payload = jwt.decode(
-            token,
+            access_token,
             settings.JWT_SECRET,
             algorithms=[settings.JWT_ALGORITHM]
         )
 
-        # Verify token type
         if payload.get("type") != "access":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type",
-                headers={"WWW-Authenticate": "Bearer"}
+                detail={"error": "invalid_token", "message": "Invalid token type"}
             )
 
-        return payload
+        user_id = UUID(payload["sub"])
+        username = payload["username"]
+
+        return AuthenticatedUser(user_id=user_id, username=username)
 
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"}
+            detail={"error": "invalid_token", "message": "Invalid or expired token"}
         )
 
 
-async def verify_websocket_token(token: str) -> Optional[dict]:
+async def verify_websocket_token(token: str) -> Optional[AuthenticatedUser]:
     """
     Verify JWT token for WebSocket connections
-    Returns payload if valid, None if invalid
+    Returns AuthenticatedUser if valid, None if invalid
     """
     try:
         payload = jwt.decode(
@@ -63,7 +72,10 @@ async def verify_websocket_token(token: str) -> Optional[dict]:
         if payload.get("type") != "access":
             return None
 
-        return payload
+        user_id = UUID(payload["sub"])
+        username = payload["username"]
+
+        return AuthenticatedUser(user_id=user_id, username=username)
 
     except JWTError:
         return None
@@ -72,13 +84,19 @@ async def verify_websocket_token(token: str) -> Optional[dict]:
 def extract_ws_token(websocket: WebSocket) -> Optional[str]:
     """
     Extract token from WebSocket connection
-    Supports query parameter: ?token=xxx
+    Priority: Cookie > Query parameter
     """
+    # Try cookie first (preferred for web clients)
+    token = websocket.cookies.get("access_token")
+    if token:
+        return token
+
+    # Fall back to query parameter (for clients that can't send cookies)
     token = websocket.query_params.get("token")
     return token
 
 
-async def require_ws_auth(websocket: WebSocket) -> dict:
+async def require_ws_auth(websocket: WebSocket) -> AuthenticatedUser:
     """
     Require authentication for WebSocket connection
     Closes connection if invalid
@@ -89,10 +107,24 @@ async def require_ws_auth(websocket: WebSocket) -> dict:
         await websocket.close(code=4001, reason="Missing authentication token")
         raise HTTPException(status_code=401, detail="Missing token")
 
-    payload = await verify_websocket_token(token)
+    user = await verify_websocket_token(token)
 
-    if not payload:
+    if not user:
         await websocket.close(code=4001, reason="Invalid or expired token")
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    return payload
+    return user
+
+
+# Legacy compatibility - verify_token that works with the old pattern
+async def verify_token(request: Request) -> dict:
+    """
+    Legacy: Verify JWT token
+    Returns payload dict for backward compatibility
+    """
+    user = await get_current_user(request)
+    return {
+        "sub": str(user.user_id),
+        "username": user.username,
+        "type": "access"
+    }

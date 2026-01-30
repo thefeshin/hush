@@ -1,82 +1,128 @@
 /**
  * Main application component with PWA support
- * Handles authentication flow and routing
+ * Handles multi-user authentication flow
  */
 
 import { useEffect, useState } from 'react';
 import { CryptoProvider, useCrypto } from './crypto/CryptoContext';
-import { useAuthStore } from './stores/authStore';
-import { initDatabase, loadIdentity } from './services/storage';
-import { Login } from './components/Login';
-import { IdentitySetup } from './components/IdentitySetup';
+import { useAuthStore, User } from './stores/authStore';
+import { initDatabase } from './services/storage';
+import { getSessionVaultKey, hasStoredVaultKey } from './services/vaultStorage';
+import { isPINEnabled } from './services/deviceSettings';
+import { LoginForm, RegisterForm } from './components/auth';
+import { VaultEntry } from './components/auth/VaultEntry';
+import { PINEntry } from './components/auth/PINEntry';
 import { Chat } from './components/Chat';
+import { Settings } from './components/Settings';
 import { InstallBanner } from './components/InstallBanner';
 import { UpdateBanner } from './components/UpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import type { IdentityPayload } from './types/crypto';
+import type { VaultKey } from './types/crypto';
 
 import './styles/main.css';
 import './styles/pwa.css';
 
-function AppContent() {
-  const [appState, setAppState] = useState<'loading' | 'login' | 'setup' | 'chat'>('loading');
+type AppState = 'loading' | 'vault-entry' | 'pin-entry' | 'login' | 'register' | 'chat' | 'settings';
 
-  const { isAuthenticated } = useAuthStore();
-  const { isUnlocked, decryptIdentity } = useCrypto();
-  const setIdentity = useAuthStore(state => state.setIdentity);
+function AppContent() {
+  const [appState, setAppState] = useState<AppState>('loading');
+  const [vaultToken, setVaultToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [vaultError, setVaultError] = useState<string | null>(null);
+
+  const { isAuthenticated, user, checkAuth, setUser } = useAuthStore();
+  const { isUnlocked, unlockVaultWithKey: unlockVaultWithKeyRaw } = useCrypto();
+  const unlockVaultWithKey = unlockVaultWithKeyRaw as (key: VaultKey) => Promise<void>;
 
   // Initialize database on mount
   useEffect(() => {
     initDatabase().catch(console.error);
   }, []);
 
+  // Check for existing session on mount
+  useEffect(() => {
+    const init = async () => {
+      console.log('[App] Checking existing session...');
+      const existingUser = await checkAuth();
+
+      // First check sessionStorage (survives refresh, no PIN needed)
+      const sessionKey = await getSessionVaultKey();
+      if (sessionKey && existingUser) {
+        console.log('[App] Found session vault key, auto-unlocking...');
+        // Unlock vault with session key
+        try {
+          await unlockVaultWithKey(sessionKey);
+          setAppState('chat');
+          return;
+        } catch (err) {
+          console.error('[App] Failed to unlock with session key:', err);
+          // Fall through to check for PIN
+        }
+      }
+
+      // Check device settings for PIN preference
+      const pinEnabled = await isPINEnabled();
+      if (pinEnabled && existingUser) {
+        // Check if PIN-protected vault key exists
+        const hasStoredKey = await hasStoredVaultKey();
+        if (hasStoredKey) {
+          console.log('[App] PIN enabled with stored key, prompting for PIN...');
+          setAppState('pin-entry');
+          return;
+        }
+        // PIN enabled but no stored key (edge case) - fall through to vault entry
+      }
+
+      // No session, no PIN-enabled stored key -> show vault entry
+      console.log('[App] No existing session or PIN-enabled stored key, showing vault entry');
+      setAppState('vault-entry');
+    };
+
+    init();
+  }, []);
+
   // Handle auth state changes
   useEffect(() => {
-    console.log('[App] Auth state changed:', { isAuthenticated, isUnlocked, appState });
+    console.log('[App] State check:', { isAuthenticated, isUnlocked, appState, user: user?.username });
 
-    if (!isAuthenticated || !isUnlocked) {
+    if (isAuthenticated && isUnlocked && appState !== 'chat') {
+      setAppState('chat');
+    }
+  }, [isAuthenticated, isUnlocked, appState]);
+
+  const handleVaultSuccess = async (token: string, _salt: string) => {
+    console.log('[App] Vault verified...');
+    setVaultToken(token);
+    // Salt is handled internally by VaultEntry component
+
+    // If already authenticated (existing session), go straight to chat
+    if (isAuthenticated && user) {
+      setAppState('chat');
+    } else {
       setAppState('login');
-      return;
-    }
-
-    // Try to load existing identity
-    console.log('[App] Calling loadExistingIdentity');
-    loadExistingIdentity();
-  }, [isAuthenticated, isUnlocked]);
-
-  const loadExistingIdentity = async () => {
-    try {
-      console.log('[App] Loading existing identity...');
-      const encrypted = await loadIdentity();
-      console.log('[App] Encrypted identity:', encrypted ? 'found' : 'not found');
-
-      if (encrypted) {
-        // Decrypt and restore identity
-        const identity = await decryptIdentity<IdentityPayload>(encrypted);
-        console.log('[App] Identity decrypted:', identity);
-        setIdentity({
-          userId: identity.user_id,
-          displayName: identity.display_name
-        });
-        setAppState('chat');
-      } else {
-        // No existing identity - show setup
-        console.log('[App] No identity found, showing setup');
-        setAppState('setup');
-      }
-    } catch (err) {
-      // Decryption failed - identity from different vault
-      console.error('[App] Failed to decrypt identity:', err);
-      setAppState('setup');
     }
   };
 
-  const handleLoginSuccess = () => {
-    // Will trigger useEffect to check for identity
-  };
-
-  const handleIdentityCreated = () => {
+  const handleLoginSuccess = (loggedInUser: User) => {
+    console.log('[App] Login successful:', loggedInUser.username);
+    setUser(loggedInUser);
     setAppState('chat');
+  };
+
+  const handleRegisterSuccess = (newUser: User) => {
+    console.log('[App] Registration successful:', newUser.username);
+    setUser(newUser);
+    setAppState('chat');
+  };
+
+  const handlePINUnlock = async (vaultKey: VaultKey) => {
+    await unlockVaultWithKey(vaultKey);
+    setAppState('chat');
+  };
+
+  const handleVaultEntryCancel = () => {
+    // User cancelled PIN entry, go back to full vault entry
+    setAppState('vault-entry');
   };
 
   return (
@@ -91,16 +137,49 @@ function AppContent() {
         </div>
       )}
 
-      {appState === 'login' && (
-        <Login onSuccess={handleLoginSuccess} />
+      {appState === 'vault-entry' && (
+        <VaultEntry
+          onSuccess={handleVaultSuccess}
+          isLoading={isLoading}
+          error={vaultError}
+          onClearError={() => setVaultError(null)}
+        />
       )}
 
-      {appState === 'setup' && (
-        <IdentitySetup onComplete={handleIdentityCreated} />
+      {appState === 'pin-entry' && (
+        <PINEntry
+          onSuccess={handlePINUnlock}
+          onCancel={handleVaultEntryCancel}
+          showCancel={true}
+        />
+      )}
+
+      {appState === 'login' && vaultToken && (
+        <LoginForm
+          vaultToken={vaultToken}
+          onSuccess={handleLoginSuccess}
+          onSwitchToRegister={() => setAppState('register')}
+          isLoading={isLoading}
+          setIsLoading={setIsLoading}
+        />
+      )}
+
+      {appState === 'register' && vaultToken && (
+        <RegisterForm
+          vaultToken={vaultToken}
+          onSuccess={handleRegisterSuccess}
+          onSwitchToLogin={() => setAppState('login')}
+          isLoading={isLoading}
+          setIsLoading={setIsLoading}
+        />
       )}
 
       {appState === 'chat' && (
-        <Chat />
+        <Chat onNavigate={(page) => setAppState(page === 'settings' ? 'settings' : 'chat')} />
+      )}
+
+      {appState === 'settings' && (
+        <Settings onBack={() => setAppState('chat')} />
       )}
 
       {/* Bottom Banners */}
