@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { CryptoProvider, useCrypto } from './crypto/CryptoContext';
 import { useAuthStore, User } from './stores/authStore';
 import { initDatabase } from './services/storage';
-import { getSessionVaultKey, hasStoredVaultKey } from './services/vaultStorage';
+import { hasStoredVaultKey } from './services/vaultStorage';
 import { isPINEnabled } from './services/deviceSettings';
 import { LoginForm, RegisterForm } from './components/auth';
 import { VaultEntry } from './components/auth/VaultEntry';
@@ -45,22 +45,7 @@ function AppContent() {
       console.log('[App] Checking existing session...');
       const existingUser = await checkAuth();
 
-      // First check sessionStorage (survives refresh, no PIN needed)
-      const sessionKey = await getSessionVaultKey();
-      if (sessionKey && existingUser) {
-        console.log('[App] Found session vault key, auto-unlocking...');
-        // Unlock vault with session key
-        try {
-          await unlockVaultWithKey(sessionKey);
-          setAppState('chat');
-          return;
-        } catch (err) {
-          console.error('[App] Failed to unlock with session key:', err);
-          // Fall through to check for PIN
-        }
-      }
-
-      // Check device settings for PIN preference
+      // Check device settings for PIN preference FIRST
       const pinEnabled = await isPINEnabled();
       if (pinEnabled && existingUser) {
         // Check if PIN-protected vault key exists
@@ -73,8 +58,8 @@ function AppContent() {
         // PIN enabled but no stored key (edge case) - fall through to vault entry
       }
 
-      // No session, no PIN-enabled stored key -> show vault entry
-      console.log('[App] No existing session or PIN-enabled stored key, showing vault entry');
+      // No PIN or PIN disabled -> show vault entry (12 words)
+      console.log('[App] No PIN-enabled stored key, showing vault entry');
       setAppState('vault-entry');
     };
 
@@ -85,7 +70,8 @@ function AppContent() {
   useEffect(() => {
     console.log('[App] State check:', { isAuthenticated, isUnlocked, appState, user: user?.username });
 
-    if (isAuthenticated && isUnlocked && appState !== 'chat') {
+    // Only auto-transition to chat if not in settings mode
+    if (isAuthenticated && isUnlocked && appState !== 'chat' && appState !== 'settings') {
       setAppState('chat');
     }
   }, [isAuthenticated, isUnlocked, appState]);
@@ -95,23 +81,44 @@ function AppContent() {
     setVaultToken(token);
     // Salt is handled internally by VaultEntry component
 
-    // If already authenticated (existing session), go straight to chat
+    // If already authenticated (existing session), unlock vault and go to chat
     if (isAuthenticated && user) {
+      const { getSessionVaultKey } = await import('./services/vaultStorage');
+      const storedKey = await getSessionVaultKey();
+      if (storedKey) {
+        await unlockVaultWithKey(storedKey);
+      }
       setAppState('chat');
     } else {
       setAppState('login');
     }
   };
 
-  const handleLoginSuccess = (loggedInUser: User) => {
+  const handleLoginSuccess = async (loggedInUser: User) => {
     console.log('[App] Login successful:', loggedInUser.username);
     setUser(loggedInUser);
+
+    // Unlock vault with stored key after login
+    const { getSessionVaultKey } = await import('./services/vaultStorage');
+    const storedKey = await getSessionVaultKey();
+    if (storedKey) {
+      await unlockVaultWithKey(storedKey);
+    }
+
     setAppState('chat');
   };
 
-  const handleRegisterSuccess = (newUser: User) => {
+  const handleRegisterSuccess = async (newUser: User) => {
     console.log('[App] Registration successful:', newUser.username);
     setUser(newUser);
+
+    // Unlock vault with stored key after registration
+    const { getSessionVaultKey } = await import('./services/vaultStorage');
+    const storedKey = await getSessionVaultKey();
+    if (storedKey) {
+      await unlockVaultWithKey(storedKey);
+    }
+
     setAppState('chat');
   };
 

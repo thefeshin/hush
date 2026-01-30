@@ -8,9 +8,11 @@ import React, { useState, useEffect } from 'react';
 
 interface PINSetupProps {
   onSuccess: (pin: string) => void;
+  onCancel?: () => void;
+  isLoading?: boolean;
 }
 
-export function PINSetup({ onSuccess }: PINSetupProps) {
+export function PINSetup({ onSuccess, onCancel, isLoading = false }: PINSetupProps) {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string>('');
@@ -96,18 +98,31 @@ export function PINSetup({ onSuccess }: PINSetupProps) {
           <button
             type="submit"
             className="primary-button"
+            disabled={isLoading}
           >
-            {isConfirming ? 'Confirm PIN' : 'Continue'}
+            {isLoading ? 'Setting up...' : (isConfirming ? 'Confirm PIN' : 'Continue')}
           </button>
 
-          {isConfirming && (
+          {isConfirming ? (
             <div className="auth-switch">
               <button
                 type="button"
                 className="link-button"
                 onClick={handleBack}
+                disabled={isLoading}
               >
                 Back
+              </button>
+            </div>
+          ) : onCancel && (
+            <div className="auth-switch">
+              <button
+                type="button"
+                className="link-button"
+                onClick={onCancel}
+                disabled={isLoading}
+              >
+                Cancel
               </button>
             </div>
           )}

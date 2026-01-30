@@ -175,24 +175,7 @@ export function Settings({ onBack }: SettingsProps) {
 
   // Render different states
   if (state === 'enable-pin') {
-    return (
-      <div className="login-screen">
-        <div className="login-card">
-          <div className="logo">
-            <h1>HUSH</h1>
-            <p className="tagline">Enable PIN</p>
-          </div>
-          <PINSetup onSuccess={handleEnablePIN} />
-          <button
-            className="link-button"
-            onClick={() => setState('view')}
-            disabled={isLoading}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
+    return <PINSetup onSuccess={handleEnablePIN} onCancel={() => setState('view')} isLoading={isLoading} />;
   }
 
   if (state === 'disable-pin') {
