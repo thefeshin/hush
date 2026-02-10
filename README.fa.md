@@ -11,7 +11,7 @@
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
 
-[English](README.md) | فارسی | [Roadmap](TODO.md) | [License](LICENSE)
+[English](README.md) | فارسی | [License](LICENSE)
 
 HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزنگاری سمت کلاینت و حداقل‌سازی اعتماد به سرور تمرکز دارد.
 سرور فقط payloadهای رمز‌شده را رله می‌کند و تنها متادیتای لازم برای مسیردهی، کشف گفتگو و مدیریت نشست را نگه می‌دارد.
@@ -25,9 +25,6 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - اسکریپت‌های استقرار آفلاین/Air-Gapped
 
 ## وضعیت فعلی پروژه
-
-برای این مخزن یک برنامه‌ی سخت‌گیرانه‌ی امنیتی و ریفکتور تعریف شده است.  
-جزئیات کامل در `TODO.md` آمده است.
 
 فاز P0 در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
 - کنترل دسترسی مبتنی بر عضویت گفتگو برای مسیرهای REST و WebSocket اعمال شد،
@@ -59,7 +56,16 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - `cli/`: راه‌انداز و تولید secret
 - `offline/`: ساخت bundle و استقرار آفلاین
 - `nginx/`: پروکسی و TLS
-- `TODO.md`: نقشه‌ی راه اصلاحات
+
+## نکات امنیت و Realtime
+
+- احراز هویت WebSocket فقط از طریق cookie `access_token` انجام می‌شود.
+- payload مربوط به `subscribe_user` فقط `{"type":"subscribe_user"}` است (بدون `user_id` از سمت کلاینت).
+- اعتبارسنجی payload در REST/WebSocket شامل:
+  - decode سخت‌گیرانه‌ی base64،
+  - طول دقیق IV برابر ۱۲ بایت،
+  - سقف ciphertext (پیام: 64 KiB decoded، متادیتای گفتگو: 16 KiB decoded)،
+  - محدودیت‌های per-connection در WebSocket (سقف subscription + rate guard پیام ورودی).
 
 ## پیش‌نیازها
 
@@ -172,7 +178,7 @@ docker compose restart backend
 docker compose down -v
 ```
 
-## گام‌های بعدی (مطابق `TODO.md`)
+## برنامه‌های بعدی
 
 1. افزودن تست‌های یکپارچه end-to-end برای سناریوهای reconnect/resubscribe با WebSocket واقعی.
 2. افزودن امکان تنظیم‌پذیری deployment-level برای محدودیت‌های payload/rate در صورت نیاز عملیاتی.

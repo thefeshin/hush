@@ -11,7 +11,7 @@
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
 
-English | [فارسی](README.fa.md) | [Roadmap](TODO.md) | [License](LICENSE)
+English | [فارسی](README.fa.md) | [License](LICENSE)
 
 HUSH is a self-hosted private messaging vault focused on client-side cryptography and minimal server trust.
 The backend relays encrypted payloads and stores only metadata needed for routing, discovery, and session management.
@@ -25,8 +25,6 @@ The backend relays encrypted payloads and stores only metadata needed for routin
 - Air-gapped/offline bundle deployment scripts.
 
 ## Current Status
-
-This repository has an active hardening roadmap. See `TODO.md` for critical findings and phased remediation work.
 
 P0 hardening is complete as of **February 10, 2026**:
 - strict server-side participant authorization is enforced for REST and WebSocket message paths,
@@ -58,7 +56,16 @@ Breaking client contract changes:
 - `cli/`: interactive setup and secret generation.
 - `offline/`: bundle/deploy scripts for air-gapped environments.
 - `nginx/`: reverse proxy and TLS config.
-- `TODO.md`: security/refactor next steps.
+
+## Security and Realtime Notes
+
+- WebSocket authentication is cookie-only (`access_token` cookie).
+- `subscribe_user` payload is `{"type":"subscribe_user"}` (no client `user_id`).
+- REST and WebSocket payload validation enforces:
+  - strict base64 decoding,
+  - IV length = 12 bytes,
+  - ciphertext caps (messages: 64 KiB decoded, thread metadata: 16 KiB decoded),
+  - per-connection WebSocket safeguards (subscription cap + inbound rate guard).
 
 ## Prerequisites
 
@@ -170,7 +177,7 @@ docker compose restart backend
 docker compose down -v
 ```
 
-## Next Steps (from `TODO.md`)
+## Planned Improvements
 
 1. Add end-to-end reconnect/resubscribe integration tests against a live WebSocket server.
 2. Add deployment-level override knobs for payload/rate limits where operators need tuning.
