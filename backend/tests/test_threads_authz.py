@@ -8,6 +8,8 @@ from app.dependencies.auth import AuthenticatedUser
 from app.routers.threads import create_thread
 from app.schemas.thread import ThreadCreate
 
+VALID_IV_B64 = "MTIzNDU2Nzg5MDEy"  # base64("123456789012")
+
 
 @pytest.mark.asyncio
 async def test_create_thread_rejects_user_not_in_participants():
@@ -19,7 +21,7 @@ async def test_create_thread_rejects_user_not_in_participants():
     thread = ThreadCreate(
         id=uuid4(),
         ciphertext="Zm9v",  # "foo"
-        iv="YmFy",  # "bar"
+        iv=VALID_IV_B64,
         participant_1=participants[0],
         participant_2=participants[1],
     )
@@ -43,7 +45,7 @@ async def test_create_thread_rejects_unsorted_participants():
     thread = ThreadCreate(
         id=uuid4(),
         ciphertext="Zm9v",  # "foo"
-        iv="YmFy",  # "bar"
+        iv=VALID_IV_B64,
         participant_1=unsorted_participants[0],
         participant_2=unsorted_participants[1],
     )

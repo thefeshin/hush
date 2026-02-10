@@ -1,5 +1,5 @@
 /**
- * Conversation view with real-time subscription (renamed from ThreadView)
+ * Conversation view with real-time subscription
  */
 
 import { useEffect } from 'react';
@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useCrypto } from '../crypto/CryptoContext';
-import { useThreadSubscription } from '../hooks/useThreadSubscription';
+import { useConversationSubscription } from '../hooks/useConversationSubscription';
 import { MessageList } from './MessageList';
 import { MessageComposer } from './MessageComposer';
 
@@ -24,8 +24,8 @@ export function ConversationView({ conversationId }: Props) {
   const conversation = getConversation(conversationId);
   const messages = getMessages(conversationId);
 
-  // Subscribe to real-time updates (still uses threadId internally)
-  useThreadSubscription(conversationId);
+  // Subscribe to real-time updates for the active conversation.
+  useConversationSubscription(conversationId);
 
   // Load messages when conversation changes
   useEffect(() => {
@@ -66,15 +66,9 @@ export function ConversationView({ conversationId }: Props) {
       />
 
       <MessageComposer
-        threadId={conversationId}
+        conversationId={conversationId}
         participantId={conversation.participantId}
       />
     </div>
   );
-}
-
-// Export as ThreadView for backward compatibility
-// TODO: Remove after full migration
-export function ThreadView(props: { threadId: string }) {
-  return <ConversationView conversationId={props.threadId} />;
 }

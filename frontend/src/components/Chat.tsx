@@ -7,7 +7,6 @@ import { useAuthStore } from '../stores/authStore';
 import { useContactStore } from '../stores/contactStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
-import { wsService } from '../services/websocket';
 import { Sidebar } from './Sidebar';
 import { ConversationView } from './ConversationView';
 import { EmptyState } from './EmptyState';
@@ -53,20 +52,8 @@ export function Chat({ onNavigate }: ChatProps) {
 
     const initializeDiscovery = async () => {
       try {
-        // Discover all conversations for this user (including from unknown contacts)
-        const discoveredConversationIds = await discoverConversations(user.id, decryptIdentity);
-
-        // Connect to WebSocket
-        await wsService.connect();
-
-        // Subscribe to all discovered conversations via WebSocket
-        for (const conversationId of discoveredConversationIds) {
-          wsService.subscribe(conversationId);
-        }
-
-        // Also subscribe to user-level for automatic discovery of new conversations
-        wsService.subscribeToUser();
-
+        // Discover all conversations for this user (including unknown contacts).
+        await discoverConversations(user.id, decryptIdentity);
         setHasDiscovered(true);
       } catch (err) {
         console.error('Failed to initialize conversation discovery', err);

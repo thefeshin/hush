@@ -1,5 +1,5 @@
 /**
- * Conversation state management (renamed from threadStore)
+ * Conversation state management
  */
 
 import { create } from 'zustand';
@@ -310,8 +310,3 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     });
   }
 }));
-
-// Re-export thread-specific functions for backward compatibility
-// TODO: Remove these after full migration
-export const useThreadStore = useConversationStore;
-export type Thread = Conversation;

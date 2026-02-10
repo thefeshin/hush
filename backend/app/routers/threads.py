@@ -11,8 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import get_connection
 from app.dependencies.auth import get_current_user, AuthenticatedUser
+from app.security_limits import IV_BYTES, MAX_THREAD_CIPHERTEXT_BYTES
 from app.schemas.thread import ThreadCreate, ThreadResponse, ThreadQuery
 from app.services.authorization import require_thread_participant
+from app.utils.payload_validation import decode_base64_field
 
 router = APIRouter()
 
@@ -57,14 +59,17 @@ async def create_thread(
             detail="Forbidden: user must be one of the thread participants",
         )
 
-    # Validate base64 encoding
-    try:
-        ciphertext_bytes = base64.b64decode(thread.ciphertext)
-        iv_bytes = base64.b64decode(thread.iv)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid base64 encoding"
-        )
+    ciphertext_bytes = decode_base64_field(
+        thread.ciphertext,
+        field_name="ciphertext",
+        max_bytes=MAX_THREAD_CIPHERTEXT_BYTES,
+    )
+    iv_bytes = decode_base64_field(
+        thread.iv,
+        field_name="iv",
+        max_bytes=IV_BYTES,
+        exact_bytes=IV_BYTES,
+    )
 
     # Check if thread already exists
     existing = await conn.fetchrow(

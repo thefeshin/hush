@@ -41,6 +41,12 @@ P1 hardening is also complete as of **February 10, 2026**:
 - backend startup fails fast on missing auth secrets or invalid failure mode,
 - `/health/db` now returns sanitized `503` on database failure.
 
+Post-P1 refactor/validation phases are complete as of **February 10, 2026**:
+- legacy thread/conversation compatibility layers were removed in favor of conversation-first frontend state,
+- realtime connection lifecycle is centralized under a single provider-owned path,
+- strict payload guards are enforced for REST/WebSocket encrypted fields (base64 validation, IV length, ciphertext caps),
+- WebSocket now applies per-connection subscription caps and inbound message rate guards.
+
 Breaking client contract changes:
 - WebSocket no longer accepts `?token=...`.
 - `subscribe_user` payload is now `{"type":"subscribe_user"}` (no `user_id` field).
@@ -166,9 +172,9 @@ docker compose down -v
 
 ## Next Steps (from `TODO.md`)
 
-1. Consolidate duplicate frontend state stores for threads/conversations.
-2. Centralize WebSocket lifecycle ownership and reconnect/subscription boundaries.
-3. Expand payload validation/caps and add deeper conversation-isolation and fallback-path tests.
+1. Add end-to-end reconnect/resubscribe integration tests against a live WebSocket server.
+2. Add deployment-level override knobs for payload/rate limits where operators need tuning.
+3. Expand frontend queue replay tests for intermittent connectivity scenarios.
 
 ## Language and License
 

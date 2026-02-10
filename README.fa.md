@@ -42,6 +42,12 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - backend در صورت نبود secretهای ضروری یا `FAILURE_MODE` نامعتبر، در startup متوقف می‌شود،
 - مسیر `/health/db` هنگام خطای دیتابیس، پاسخ sanitize‌شده با `503` می‌دهد.
 
+فازهای پس از P1 (ریفکتور/اعتبارسنجی) نیز در **۱۰ فوریه ۲۰۲۶** تکمیل شده‌اند:
+- لایه‌های ناسازگارِ thread/conversation حذف و وضعیت frontend به مدل conversation-first یکپارچه شد،
+- چرخه‌عمر realtime/WebSocket در یک مسیر مرکزی مدیریت می‌شود،
+- برای payloadهای رمز‌شده در REST/WebSocket اعتبارسنجی سخت‌گیرانه اعمال شد (base64 strict، طول دقیق IV، سقف ciphertext)،
+- برای WebSocket محدودیت اشتراک گفتگو به ازای هر اتصال و rate guard برای پیام‌های ورودی اضافه شد.
+
 تغییرات ناسازگار با کلاینت‌های قدیمی:
 - اتصال `WebSocket` با `?token=...` دیگر پشتیبانی نمی‌شود.
 - payload جدید `subscribe_user` به شکل `{"type":"subscribe_user"}` است.
@@ -168,9 +174,9 @@ docker compose down -v
 
 ## گام‌های بعدی (مطابق `TODO.md`)
 
-1. یکپارچه‌سازی storeهای تکراری thread/conversation در frontend.
-2. متمرکزسازی مدیریت چرخه‌عمر WebSocket و مرزهای reconnect/subscription.
-3. افزایش اعتبارسنجی payloadها و توسعه تست‌های isolation گفتگو و fallback.
+1. افزودن تست‌های یکپارچه end-to-end برای سناریوهای reconnect/resubscribe با WebSocket واقعی.
+2. افزودن امکان تنظیم‌پذیری deployment-level برای محدودیت‌های payload/rate در صورت نیاز عملیاتی.
+3. گسترش تست‌های frontend برای بازپخش صف پیام در شرایط اتصال ناپایدار.
 
 ## زبان و مجوز
 

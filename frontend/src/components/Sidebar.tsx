@@ -7,8 +7,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useContactStore, Contact } from '../stores/contactStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
+import { useWebSocket } from '../hooks/useWebSocket';
 import { clearAllData } from '../services/storage';
-import { wsService } from '../services/websocket';
 import { AddContactModal } from './AddContactModal';
 import { ConnectionStatus } from './ConnectionStatus';
 
@@ -24,12 +24,13 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   const user = useAuthStore(state => state.user);
   const { logout } = useAuthStore();
   const { lockVault } = useCrypto();
+  const { disconnect } = useWebSocket();
 
   const { conversations, activeConversationId, setActiveConversation } = useConversationStore();
   const { contacts } = useContactStore();
 
   const handleLogout = async () => {
-    wsService.disconnect();
+    disconnect();
     await clearAllData();
     await lockVault();  // lockVault is now async
     await logout();

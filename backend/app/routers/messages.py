@@ -12,8 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from app.database import get_connection
 from app.dependencies.auth import get_current_user, AuthenticatedUser
+from app.security_limits import IV_BYTES, MAX_MESSAGE_CIPHERTEXT_BYTES
 from app.schemas.message import MessageCreate, MessageResponse
 from app.services.authorization import require_message_participant, require_thread_participant
+from app.utils.payload_validation import decode_base64_field
 
 router = APIRouter()
 
@@ -32,15 +34,17 @@ async def create_message(
     - Offline message queue sync
     - Fallback when WebSocket unavailable
     """
-    # Validate base64 encoding
-    try:
-        ciphertext_bytes = base64.b64decode(message.ciphertext)
-        iv_bytes = base64.b64decode(message.iv)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid base64 encoding"
-        )
+    ciphertext_bytes = decode_base64_field(
+        message.ciphertext,
+        field_name="ciphertext",
+        max_bytes=MAX_MESSAGE_CIPHERTEXT_BYTES,
+    )
+    iv_bytes = decode_base64_field(
+        message.iv,
+        field_name="iv",
+        max_bytes=IV_BYTES,
+        exact_bytes=IV_BYTES,
+    )
 
     await require_thread_participant(conn, message.thread_id, user.user_id)
 

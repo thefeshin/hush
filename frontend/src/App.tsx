@@ -17,6 +17,7 @@ import { Settings } from './components/Settings';
 import { InstallBanner } from './components/InstallBanner';
 import { UpdateBanner } from './components/UpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { RealtimeProvider } from './context/RealtimeContext';
 import type { VaultKey } from './types/crypto';
 
 import './styles/main.css';
@@ -199,7 +200,9 @@ function AppContent() {
 export function App() {
   return (
     <CryptoProvider>
-      <AppContent />
+      <RealtimeProvider>
+        <AppContent />
+      </RealtimeProvider>
     </CryptoProvider>
   );
 }

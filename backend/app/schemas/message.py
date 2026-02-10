@@ -7,12 +7,14 @@ from uuid import UUID
 from datetime import datetime
 from typing import Optional
 
+from app.security_limits import MAX_IV_B64_CHARS, MAX_MESSAGE_CIPHERTEXT_B64_CHARS
+
 
 class MessageCreate(BaseModel):
     """Create a new message (encrypted content)"""
     thread_id: UUID
-    ciphertext: str             # Base64-encoded encrypted message
-    iv: str                     # Base64-encoded IV
+    ciphertext: str = Field(..., min_length=4, max_length=MAX_MESSAGE_CIPHERTEXT_B64_CHARS)
+    iv: str = Field(..., min_length=16, max_length=MAX_IV_B64_CHARS)
 
 
 class MessageResponse(BaseModel):

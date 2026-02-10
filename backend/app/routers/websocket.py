@@ -3,7 +3,6 @@ WebSocket endpoint for real-time communication
 All messages are encrypted blobs - server is a blind relay
 """
 
-import base64
 import logging
 from uuid import UUID
 
@@ -12,7 +11,15 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from app.services.websocket import ws_manager
 from app.dependencies.auth import verify_websocket_token, extract_ws_token
 from app.database import get_pool
+from app.security_limits import (
+    IV_BYTES,
+    MAX_MESSAGE_CIPHERTEXT_BYTES,
+    MAX_WS_MESSAGES_PER_WINDOW,
+    MAX_WS_SUBSCRIPTIONS_PER_CONNECTION,
+    WS_RATE_WINDOW_SECONDS,
+)
 from app.services.authorization import require_thread_participant
+from app.utils.payload_validation import decode_base64_field
 
 router = APIRouter()
 logger = logging.getLogger("hush.websocket")
@@ -132,6 +139,16 @@ async def handle_subscribe(websocket: WebSocket, data: dict, pool):
         })
         return
 
+    already_subscribed = await ws_manager.is_subscribed_to_thread(websocket, thread_id)
+    if not already_subscribed:
+        current = await ws_manager.get_subscription_count(websocket)
+        if current >= MAX_WS_SUBSCRIPTIONS_PER_CONNECTION:
+            await ws_manager.send_personal(websocket, {
+                "type": "error",
+                "message": "subscription_limit_reached"
+            })
+            return
+
     try:
         async with pool.acquire() as conn:
             await require_thread_participant(conn, thread_uuid, websocket.state.user_id)
@@ -191,6 +208,18 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         })
         return
 
+    allowed = await ws_manager.allow_incoming_message(
+        websocket,
+        max_messages=MAX_WS_MESSAGES_PER_WINDOW,
+        window_seconds=WS_RATE_WINDOW_SECONDS,
+    )
+    if not allowed:
+        await ws_manager.send_personal(websocket, {
+            "type": "error",
+            "message": "rate_limited"
+        })
+        return
+
     # Validate UUID format
     try:
         thread_uuid = UUID(thread_id)
@@ -201,14 +230,22 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         })
         return
 
-    # Validate base64 encoding
     try:
-        ciphertext_bytes = base64.b64decode(ciphertext)
-        iv_bytes = base64.b64decode(iv)
-    except Exception:
+        ciphertext_bytes = decode_base64_field(
+            ciphertext,
+            field_name="ciphertext",
+            max_bytes=MAX_MESSAGE_CIPHERTEXT_BYTES,
+        )
+        iv_bytes = decode_base64_field(
+            iv,
+            field_name="iv",
+            max_bytes=IV_BYTES,
+            exact_bytes=IV_BYTES,
+        )
+    except HTTPException as exc:
         await ws_manager.send_personal(websocket, {
             "type": "error",
-            "message": "Invalid base64 encoding"
+            "message": str(exc.detail)
         })
         return
 
@@ -270,17 +307,37 @@ async def handle_subscribe_user(websocket: WebSocket, pool):
                 WHERE participant_1 = $1 OR participant_2 = $2
             """, user_id, user_id)
 
-        # Subscribe to all discovered threads
+        available_slots = MAX_WS_SUBSCRIPTIONS_PER_CONNECTION - await ws_manager.get_subscription_count(websocket)
+        if available_slots <= 0:
+            await ws_manager.send_personal(websocket, {
+                "type": "error",
+                "message": "subscription_limit_reached"
+            })
+            return
+
+        subscribed_count = 0
+        # Subscribe to discovered threads up to per-connection cap.
         for row in rows:
+            if subscribed_count >= available_slots:
+                break
             thread_id = str(row["thread_id"])
+            if await ws_manager.is_subscribed_to_thread(websocket, thread_id):
+                continue
             await ws_manager.subscribe_to_thread(websocket, thread_id)
+            subscribed_count += 1
 
         await ws_manager.send_personal(websocket, {
             "type": "user_subscribed",
-            "thread_count": len(rows)
+            "thread_count": subscribed_count
         })
 
-        logger.info(f"User {str(user_id)} subscribed to {len(rows)} threads")
+        if subscribed_count < len(rows):
+            await ws_manager.send_personal(websocket, {
+                "type": "error",
+                "message": "subscription_limit_reached"
+            })
+
+        logger.info(f"User {str(user_id)} subscribed to {subscribed_count} threads")
 
     except Exception as exc:
         logger.error(f"Failed to subscribe user: {type(exc).__name__}")
