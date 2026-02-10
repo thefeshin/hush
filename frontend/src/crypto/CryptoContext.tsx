@@ -18,7 +18,7 @@ interface CryptoContextValue {
   // Vault operations
   unlockVault: (words: string, salt: string) => Promise<void>;
   unlockVaultWithKey: (key: VaultKey | CryptoKey) => Promise<void>;
-  lockVault: () => void;
+  lockVault: (options?: { clearStoredKey?: boolean }) => Promise<void>;
 
   // Thread key operations
   getThreadKey: (myUUID: string, otherUUID: string) => Promise<ThreadKey>;
@@ -79,9 +79,11 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Lock vault and clear keys
-  const lockVault = useCallback(async () => {
-    // Clear IndexedDB stored key
-    await clearStoredVaultKey();
+  const lockVault = useCallback(async (options?: { clearStoredKey?: boolean }) => {
+    // Keep PIN-protected stored key by default on lock.
+    if (options?.clearStoredKey) {
+      await clearStoredVaultKey();
+    }
     // Clear session cache
     clearSessionVaultKey();
     // Clear keys from memory

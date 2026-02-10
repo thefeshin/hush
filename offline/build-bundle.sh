@@ -85,7 +85,7 @@ secrets = generator.generate_all()
 config = {
     'deployment_mode': 'docker',
     'max_auth_failures': 5,
-    'failure_mode': 'block',
+    'failure_mode': 'ip_temp',
     'ip_block_minutes': 5,
     'panic_mode': False,
     'persist_vault': True

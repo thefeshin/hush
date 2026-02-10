@@ -143,8 +143,8 @@ export function VaultEntry({ onSuccess, isLoading = false, error, onClearError }
         </form>
 
         <div className="security-notice">
-          <p>Your words are never sent to the server.</p>
-          <p>Only a hash is used for authentication.</p>
+          <p>Your words are sent over TLS for verification only.</p>
+          <p>The server stores a hash for authentication, not plaintext words.</p>
         </div>
       </div>
     </div>

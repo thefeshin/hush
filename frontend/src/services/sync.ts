@@ -133,10 +133,11 @@ export class SyncService {
     threadId: string,
     encrypted: EncryptedData
   ): Promise<{ id: string; created_at: string }> {
-    const response = await this.authFetch(`/threads/${threadId}/messages`, {
+    const response = await this.authFetch('/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        thread_id: threadId,
         ciphertext: encrypted.ciphertext,
         iv: encrypted.iv
       })

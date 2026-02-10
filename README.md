@@ -34,6 +34,13 @@ P0 hardening is complete as of **February 10, 2026**:
 - WebSocket query-token auth is removed (cookie-only),
 - raw vault-key storage in `sessionStorage` is removed (memory-only runtime cache).
 
+P1 hardening is also complete as of **February 10, 2026**:
+- vault lock now preserves PIN setup by default,
+- REST fallback send path is aligned to `POST /api/messages`,
+- offline bundle scripts generate supported `FAILURE_MODE=ip_temp`,
+- backend startup fails fast on missing auth secrets or invalid failure mode,
+- `/health/db` now returns sanitized `503` on database failure.
+
 Breaking client contract changes:
 - WebSocket no longer accepts `?token=...`.
 - `subscribe_user` payload is now `{"type":"subscribe_user"}` (no `user_id` field).
@@ -148,16 +155,6 @@ Windows:
 .\offline\deploy-offline.ps1
 ```
 
-### Important temporary workaround
-
-Current offline scripts set `FAILURE_MODE=block`, but backend supports:
-- `ip_temp`
-- `ip_perm`
-- `db_wipe`
-- `db_wipe_shutdown`
-
-Before first production use, update `.env` to a supported mode (for example `FAILURE_MODE=ip_temp`).
-
 ## Operations
 
 ```bash
@@ -169,9 +166,9 @@ docker compose down -v
 
 ## Next Steps (from `TODO.md`)
 
-1. Fix offline script config generation and backend fail-fast secret validation.
-2. Fix REST fallback path mismatch and update misleading client vault copy.
-3. Consolidate duplicate frontend state/WebSocket layers and keep expanding security tests.
+1. Consolidate duplicate frontend state stores for threads/conversations.
+2. Centralize WebSocket lifecycle ownership and reconnect/subscription boundaries.
+3. Expand payload validation/caps and add deeper conversation-isolation and fallback-path tests.
 
 ## Language and License
 

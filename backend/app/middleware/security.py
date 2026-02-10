@@ -2,6 +2,7 @@
 Security middleware for request filtering
 """
 
+import logging
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -11,6 +12,8 @@ from app.config import settings
 from app.database import get_pool
 from app.middleware.rate_limit import rate_limiter
 from app.logging_config import log_rate_limited, log_panic_mode
+
+logger = logging.getLogger(__name__)
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
@@ -64,10 +67,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         except RuntimeError:
             # Database not initialized yet
-            pass
+            logger.debug("Security middleware skipped IP checks: database not initialized")
         except Exception:
-            # Don't fail requests due to security check errors
-            pass
+            # Fail open, but keep operators informed.
+            logger.exception("Security middleware failed during request checks")
 
         response = await call_next(request)
         return self._add_security_headers(response)

@@ -35,6 +35,13 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - احراز هویت WebSocket با query token حذف شد (فقط cookie)،
 - نگهداری raw vault key در `sessionStorage` حذف و به حافظه‌ی runtime محدود شد.
 
+فاز P1 نیز در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
+- قفل کردن Vault به‌صورت پیش‌فرض تنظیم PIN را حذف نمی‌کند،
+- مسیر fallback پیام‌ها با `POST /api/messages` هم‌راستا شد،
+- اسکریپت‌های آفلاین مقدار معتبر `FAILURE_MODE=ip_temp` تولید می‌کنند،
+- backend در صورت نبود secretهای ضروری یا `FAILURE_MODE` نامعتبر، در startup متوقف می‌شود،
+- مسیر `/health/db` هنگام خطای دیتابیس، پاسخ sanitize‌شده با `503` می‌دهد.
+
 تغییرات ناسازگار با کلاینت‌های قدیمی:
 - اتصال `WebSocket` با `?token=...` دیگر پشتیبانی نمی‌شود.
 - payload جدید `subscribe_user` به شکل `{"type":"subscribe_user"}` است.
@@ -150,17 +157,6 @@ Windows:
 .\offline\deploy-offline.ps1
 ```
 
-### نکته مهم (تا قبل از اصلاح اسکریپت‌ها)
-
-اسکریپت‌های آفلاین فعلا مقدار `FAILURE_MODE=block` می‌نویسند؛  
-در backend این مقدار پشتیبانی نمی‌شود. مقادیر معتبر:
-- `ip_temp`
-- `ip_perm`
-- `db_wipe`
-- `db_wipe_shutdown`
-
-قبل از استفاده عملی، مقدار `.env` را به یکی از مقادیر معتبر (مثلا `ip_temp`) تغییر دهید.
-
 ## عملیات روزمره
 
 ```bash
@@ -172,9 +168,9 @@ docker compose down -v
 
 ## گام‌های بعدی (مطابق `TODO.md`)
 
-1. اصلاح اسکریپت‌های آفلاین برای مقدارهای معتبر `FAILURE_MODE` و fail-fast برای secretهای ضروری backend.
-2. اصلاح mismatch مسیر fallback پیام‌ها در REST و به‌روزرسانی متن‌های کاربری گمراه‌کننده.
-3. یکپارچه‌سازی storeها/لایه WebSocket در frontend و توسعه بیشتر تست‌های امنیتی.
+1. یکپارچه‌سازی storeهای تکراری thread/conversation در frontend.
+2. متمرکزسازی مدیریت چرخه‌عمر WebSocket و مرزهای reconnect/subscription.
+3. افزایش اعتبارسنجی payloadها و توسعه تست‌های isolation گفتگو و fallback.
 
 ## زبان و مجوز
 

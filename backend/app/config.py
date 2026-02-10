@@ -59,6 +59,32 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
+ALLOWED_FAILURE_MODES = ("ip_temp", "ip_perm", "db_wipe", "db_wipe_shutdown")
+
+
+def validate_security_settings(active_settings: Settings) -> None:
+    """Validate deployment-critical security settings."""
+    errors = []
+
+    for field_name in ("AUTH_HASH", "KDF_SALT", "JWT_SECRET"):
+        value = getattr(active_settings, field_name, "")
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"{field_name} must be configured with a non-empty value")
+
+    if active_settings.FAILURE_MODE not in ALLOWED_FAILURE_MODES:
+        allowed = ", ".join(ALLOWED_FAILURE_MODES)
+        errors.append(f"FAILURE_MODE must be one of: {allowed}")
+
+    if active_settings.MAX_AUTH_FAILURES < 1:
+        errors.append("MAX_AUTH_FAILURES must be >= 1")
+
+    if active_settings.FAILURE_MODE == "ip_temp" and active_settings.IP_BLOCK_MINUTES < 1:
+        errors.append("IP_BLOCK_MINUTES must be >= 1 when FAILURE_MODE=ip_temp")
+
+    if errors:
+        raise ValueError("Invalid security configuration:\n- " + "\n- ".join(errors))
+
+
 @lru_cache()
 def get_settings() -> Settings:
     """Cached settings instance"""
