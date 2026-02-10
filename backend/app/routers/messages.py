@@ -11,8 +11,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from app.database import get_connection
-from app.dependencies.auth import verify_token
+from app.dependencies.auth import get_current_user, AuthenticatedUser
 from app.schemas.message import MessageCreate, MessageResponse
+from app.services.authorization import require_message_participant, require_thread_participant
 
 router = APIRouter()
 
@@ -21,7 +22,7 @@ router = APIRouter()
 async def create_message(
     message: MessageCreate,
     conn=Depends(get_connection),
-    _=Depends(verify_token)
+    user: AuthenticatedUser = Depends(get_current_user)
 ):
     """
     Create a new message (encrypted blob)
@@ -41,16 +42,7 @@ async def create_message(
             detail="Invalid base64 encoding"
         )
 
-    # Verify thread exists
-    thread_exists = await conn.fetchval("""
-        SELECT EXISTS(SELECT 1 FROM threads WHERE id = $1)
-    """, message.thread_id)
-
-    if not thread_exists:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thread not found"
-        )
+    await require_thread_participant(conn, message.thread_id, user.user_id)
 
     row = await conn.fetchrow("""
         INSERT INTO messages (thread_id, ciphertext, iv)
@@ -73,7 +65,7 @@ async def get_messages(
     after: Optional[datetime] = Query(None, description="Get messages after this timestamp"),
     limit: int = Query(50, le=200, description="Maximum messages to return"),
     conn=Depends(get_connection),
-    _=Depends(verify_token)
+    user: AuthenticatedUser = Depends(get_current_user)
 ):
     """
     Get messages for a thread
@@ -82,16 +74,7 @@ async def get_messages(
     - Use 'after' param with last message's created_at for cursor pagination
     - Default limit is 50, max is 200
     """
-    # Verify thread exists
-    thread_exists = await conn.fetchval("""
-        SELECT EXISTS(SELECT 1 FROM threads WHERE id = $1)
-    """, thread_id)
-
-    if not thread_exists:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thread not found"
-        )
+    await require_thread_participant(conn, thread_id, user.user_id)
 
     if after:
         rows = await conn.fetch("""
@@ -129,9 +112,11 @@ async def get_messages(
 async def get_message_count(
     thread_id: UUID,
     conn=Depends(get_connection),
-    _=Depends(verify_token)
+    user: AuthenticatedUser = Depends(get_current_user)
 ):
     """Get total message count for a thread"""
+    await require_thread_participant(conn, thread_id, user.user_id)
+
     count = await conn.fetchval("""
         SELECT COUNT(*) FROM messages WHERE thread_id = $1
     """, thread_id)
@@ -143,9 +128,11 @@ async def get_message_count(
 async def delete_message(
     message_id: UUID,
     conn=Depends(get_connection),
-    _=Depends(verify_token)
+    user: AuthenticatedUser = Depends(get_current_user)
 ):
     """Delete a specific message"""
+    await require_message_participant(conn, message_id, user.user_id)
+
     result = await conn.execute(
         "DELETE FROM messages WHERE id = $1",
         message_id

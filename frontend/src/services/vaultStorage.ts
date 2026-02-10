@@ -6,7 +6,6 @@
 
 import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { VaultKey } from "../types/crypto";
-import { base64ToBytes, bytesToBase64 } from "../crypto/encoding";
 
 // Vault key storage interface
 interface EncryptedVaultKey {
@@ -30,6 +29,7 @@ const VAULT_KEY_STORE = "vault";
 const VAULT_KEY_ITEM = "vault_key";
 
 let db: IDBPDatabase<VaultStorageDBSchema> | null = null;
+let sessionVaultKey: VaultKey | null = null;
 
 /**
  * Initialize vault storage database
@@ -220,48 +220,25 @@ export async function clearStoredVaultKey(): Promise<void> {
   }
 }
 
-// ==================== Session Storage (survives refresh, not tab close) ====================
+// ==================== In-memory session cache (cleared on refresh/tab close) ====================
 
 /**
- * Store vault key in sessionStorage (no PIN needed, survives refresh)
+ * Store vault key in memory for current runtime only.
  */
 export async function setSessionVaultKey(vaultKey: VaultKey): Promise<void> {
-  try {
-    const encoded = bytesToBase64(vaultKey.raw);
-    sessionStorage.setItem("vault_key_session", encoded);
-  } catch {
-    console.warn("Could not store vault key in session storage");
-  }
+  sessionVaultKey = vaultKey;
 }
 
 /**
- * Retrieve vault key from sessionStorage
+ * Retrieve vault key from memory.
  */
 export async function getSessionVaultKey(): Promise<VaultKey | null> {
-  const stored = sessionStorage.getItem("vault_key_session");
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    const rawKey = toArrayBufferBytes(base64ToBytes(stored));
-    const key = await crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      { name: "HKDF" },
-      false,
-      ["deriveKey", "deriveBits"]
-    );
-    return { key, raw: rawKey };
-  } catch {
-    // Invalid stored key
-    return null;
-  }
+  return sessionVaultKey;
 }
 
 /**
- * Clear vault key from sessionStorage
+ * Clear in-memory vault key cache.
  */
 export function clearSessionVaultKey(): void {
-  sessionStorage.removeItem("vault_key_session");
+  sessionVaultKey = null;
 }

@@ -65,7 +65,7 @@ export function Chat({ onNavigate }: ChatProps) {
         }
 
         // Also subscribe to user-level for automatic discovery of new conversations
-        wsService.subscribeToUser(user.id);
+        wsService.subscribeToUser();
 
         setHasDiscovered(true);
       } catch (err) {

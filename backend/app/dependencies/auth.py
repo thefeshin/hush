@@ -84,16 +84,9 @@ async def verify_websocket_token(token: str) -> Optional[AuthenticatedUser]:
 def extract_ws_token(websocket: WebSocket) -> Optional[str]:
     """
     Extract token from WebSocket connection
-    Priority: Cookie > Query parameter
+    Cookie-only authentication for browser WebSocket clients.
     """
-    # Try cookie first (preferred for web clients)
-    token = websocket.cookies.get("access_token")
-    if token:
-        return token
-
-    # Fall back to query parameter (for clients that can't send cookies)
-    token = websocket.query_params.get("token")
-    return token
+    return websocket.cookies.get("access_token")
 
 
 async def require_ws_auth(websocket: WebSocket) -> AuthenticatedUser:

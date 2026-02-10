@@ -1,134 +1,179 @@
 # HUSH - Zero-Knowledge Encrypted Chat Vault
 
-Private, encrypted conversations with zero server knowledge.
+[![GitHub Stars](https://img.shields.io/github/stars/thefeshin/hush?style=for-the-badge)](https://github.com/thefeshin/hush/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/thefeshin/hush?style=for-the-badge)](https://github.com/thefeshin/hush/network/members)
+[![License](https://img.shields.io/github/license/thefeshin/hush?style=for-the-badge)](https://github.com/thefeshin/hush/blob/main/LICENSE)
 
----
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
+
+English | [فارسی](README.fa.md) | [Roadmap](TODO.md) | [License](LICENSE)
+
+HUSH is a self-hosted private messaging vault focused on client-side cryptography and minimal server trust.
+The backend relays encrypted payloads and stores only metadata needed for routing, discovery, and session management.
+
+## What HUSH Provides
+
+- End-to-end encryption workflow in the client (Argon2id + HKDF + AES-GCM).
+- Cookie-based authentication with refresh-token rotation.
+- Real-time messaging over WebSocket with offline queue support.
+- PWA frontend and Docker-first deployment.
+- Air-gapped/offline bundle deployment scripts.
+
+## Current Status
+
+This repository has an active hardening roadmap. See `TODO.md` for critical findings and phased remediation work.
+
+P0 hardening is complete as of **February 10, 2026**:
+- strict server-side participant authorization is enforced for REST and WebSocket message paths,
+- WebSocket identity binding no longer trusts client-supplied `user_id`,
+- WebSocket query-token auth is removed (cookie-only),
+- raw vault-key storage in `sessionStorage` is removed (memory-only runtime cache).
+
+Breaking client contract changes:
+- WebSocket no longer accepts `?token=...`.
+- `subscribe_user` payload is now `{"type":"subscribe_user"}` (no `user_id` field).
+
+## Repository Layout
+
+- `backend/`: FastAPI API + WebSocket relay.
+- `frontend/`: React + TypeScript client (crypto, stores, PWA).
+- `cli/`: interactive setup and secret generation.
+- `offline/`: bundle/deploy scripts for air-gapped environments.
+- `nginx/`: reverse proxy and TLS config.
+- `TODO.md`: security/refactor next steps.
 
 ## Prerequisites
 
-- Docker 20.10+
-- Docker Compose 2.0+
-- Python 3.7+
-- OpenSSL (included with Git for Windows, pre-installed on Linux/macOS)
+- Docker + Docker Compose
+- Python 3
+- Node.js + npm (for local frontend dev)
+- OpenSSL (for local cert generation)
 
----
+## Online Deployment (Connected Host)
 
-## Deployment
+### Guided deployment (recommended)
 
-**Bash (Linux/macOS):**
+Linux/macOS:
 ```bash
-chmod +x hush
-./hush deploy
+chmod +x ./hush.sh
+./hush.sh
 ```
 
-**PowerShell (Windows):**
+Windows PowerShell:
 ```powershell
-python hush deploy
+.\hush.ps1
 ```
 
-This single command automatically:
-1. Installs required Python packages
-2. Generates SSL certificates (if missing)
-3. Prompts for security configuration
-4. Generates 12-word passphrase and secrets
-5. Builds and starts all Docker containers
+Choose Docker mode in the prompt. Access app at `https://localhost`.
 
-Access at: **https://localhost**
+### Manual Docker deployment
 
----
-
-## Development Mode (Without Docker)
-
-For local development/testing without the full stack.
-
-### 1. Database (PostgreSQL via Docker)
-
-**Bash:**
 ```bash
-docker run -d --name hush-postgres \
-  -e POSTGRES_USER=hush \
-  -e POSTGRES_PASSWORD=hush \
-  -e POSTGRES_DB=hush \
-  -p 5432:5432 \
-  postgres:16-alpine
+docker compose build
+docker compose up -d
+docker compose ps
 ```
 
-**PowerShell:**
-```powershell
-docker run -d --name hush-postgres `
-  -e POSTGRES_USER=hush `
-  -e POSTGRES_PASSWORD=hush `
-  -e POSTGRES_DB=hush `
-  -p 5432:5432 `
-  postgres:16-alpine
+## Local Development (Without Full Docker Stack)
+
+1. Start PostgreSQL:
+```bash
+docker run -d --name hush-postgres -e POSTGRES_USER=hush -e POSTGRES_PASSWORD=hush -e POSTGRES_DB=hush -p 5432:5432 postgres:16-alpine
 ```
 
-### 2. Backend
-
-**Bash:**
+2. Start backend:
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate
+# Windows: .\venv\Scripts\Activate.ps1
+# Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-**PowerShell:**
-```powershell
-cd backend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+Optional backend tests:
+```bash
+pip install -r requirements-dev.txt
+pytest -q
 ```
 
-Backend at: **http://localhost:8000**
-
-> **Note:** Requires `.env` file with `AUTH_HASH`, `KDF_SALT`, `JWT_SECRET`, `DATABASE_URL` (or run `./hush deploy` first to generate).
-
-### 3. Frontend
-
-**Bash & PowerShell (same):**
+3. Start frontend:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Frontend at: **http://localhost:5173**
+Frontend runs at `http://localhost:3000` (configured in `frontend/vite.config.ts`).
 
----
+## Offline Deployment (Air-Gapped)
 
-## Troubleshooting
+### On internet-connected machine
 
-### View logs
+Linux/macOS:
 ```bash
-docker-compose logs -f
+./offline/build-bundle.sh
 ```
 
-### Check container health
-```bash
-docker-compose ps
-```
-
-### Restart a service
-```bash
-docker-compose restart backend
-```
-
-### Full reset (wipes all data)
-
-**Bash:**
-```bash
-docker-compose down -v
-rm .env
-./hush deploy
-```
-
-**PowerShell:**
+Windows:
 ```powershell
-docker-compose down -v
-Remove-Item .env
-python hush deploy
+.\offline\build-bundle.ps1
 ```
+
+This produces `offline/hush-offline-bundle.tar` and generates `.env`.
+
+### Transfer to air-gapped machine
+
+Copy:
+- `offline/hush-offline-bundle.tar`
+- `docker-compose.yml`
+- `nginx/`
+- `offline/deploy-offline.sh` or `offline/deploy-offline.ps1`
+- `.env` (if you are not regenerating it on target)
+
+### On air-gapped machine
+
+Linux/macOS:
+```bash
+./offline/deploy-offline.sh
+```
+
+Windows:
+```powershell
+.\offline\deploy-offline.ps1
+```
+
+### Important temporary workaround
+
+Current offline scripts set `FAILURE_MODE=block`, but backend supports:
+- `ip_temp`
+- `ip_perm`
+- `db_wipe`
+- `db_wipe_shutdown`
+
+Before first production use, update `.env` to a supported mode (for example `FAILURE_MODE=ip_temp`).
+
+## Operations
+
+```bash
+docker compose logs -f
+docker compose ps
+docker compose restart backend
+docker compose down -v
+```
+
+## Next Steps (from `TODO.md`)
+
+1. Fix offline script config generation and backend fail-fast secret validation.
+2. Fix REST fallback path mismatch and update misleading client vault copy.
+3. Consolidate duplicate frontend state/WebSocket layers and keep expanding security tests.
+
+## Language and License
+
+- Persian docs: `README.fa.md`
+- License: MIT (`LICENSE`)

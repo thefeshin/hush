@@ -42,7 +42,6 @@ interface ClientPing {
 
 interface ClientSubscribeUser {
   type: 'subscribe_user';
-  user_id: string;
 }
 
 type ClientPayload = ClientSubscribe | ClientUnsubscribe | ClientMessage | ClientPing | ClientSubscribeUser;
@@ -267,9 +266,9 @@ export class WebSocketService {
    * Subscribe to all threads for the current user
    * This enables automatic discovery of threads from unknown contacts
    */
-  subscribeToUser(userId: string): void {
+  subscribeToUser(): void {
     if (this.state === ConnectionState.CONNECTED && this.ws) {
-      this.send({ type: 'subscribe_user', user_id: userId });
+      this.send({ type: 'subscribe_user' });
     }
   }
 

@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { isPINEnabled } from '../services/deviceSettings';
 import { enablePIN, disablePIN, changePIN, verifyPIN } from '../services/pinService';
-import { setSessionVaultKey } from '../services/vaultStorage';
+import { getSessionVaultKey, setSessionVaultKey } from '../services/vaultStorage';
 import { PINSetup } from './auth/PINSetup';
 import type { VaultKey } from '../types/crypto';
 
@@ -32,6 +32,7 @@ export function Settings({ onBack }: SettingsProps) {
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [pendingChangeVaultKey, setPendingChangeVaultKey] = useState<VaultKey | null>(null);
 
   // Load PIN enabled status on mount
   useEffect(() => {
@@ -47,23 +48,10 @@ export function Settings({ onBack }: SettingsProps) {
     setError(null);
 
     try {
-      // Get current vault key from sessionStorage
-      const storedKey = sessionStorage.getItem('vault_key_session');
-      if (!storedKey) {
+      const vaultKey = await getSessionVaultKey();
+      if (!vaultKey) {
         throw new Error('Vault key not available. Please log in again.');
       }
-
-      // Import the vault key from base64
-      const { base64ToBytes } = await import('../crypto/encoding');
-      const rawKey = new Uint8Array(base64ToBytes(storedKey));
-      const key = await crypto.subtle.importKey(
-        'raw',
-        rawKey,
-        { name: 'HKDF' },
-        false,
-        ['deriveKey', 'deriveBits']
-      );
-      const vaultKey: VaultKey = { key, raw: rawKey };
 
       await enablePIN(vaultKey, pin);
       setPinEnabled(true);
@@ -101,11 +89,7 @@ export function Settings({ onBack }: SettingsProps) {
         if (!vaultKey) {
           throw new Error('Invalid current PIN');
         }
-        // Store vault key for later use
-        sessionStorage.setItem('vault_key_change', await (async () => {
-          const { bytesToBase64 } = await import('../crypto/encoding');
-          return bytesToBase64(vaultKey.raw);
-        })());
+        setPendingChangeVaultKey(vaultKey);
         setPinChangeStep('new');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Invalid PIN');
@@ -127,35 +111,20 @@ export function Settings({ onBack }: SettingsProps) {
       }
 
       try {
-        // Get vault key from temp storage
-        const storedKey = sessionStorage.getItem('vault_key_change');
-        if (!storedKey) {
+        if (!pendingChangeVaultKey) {
           throw new Error('Session expired. Please try again.');
         }
 
-        const { base64ToBytes } = await import('../crypto/encoding');
-        const rawKey = new Uint8Array(base64ToBytes(storedKey));
-        const key = await crypto.subtle.importKey(
-          'raw',
-          rawKey,
-          { name: 'HKDF' },
-          false,
-          ['deriveKey', 'deriveBits']
-        );
-        const vaultKey: VaultKey = { key, raw: rawKey };
-
-        await changePIN(oldPin, newPin, vaultKey);
+        await changePIN(oldPin, newPin, pendingChangeVaultKey);
 
         // Update session with new PIN
-        await setSessionVaultKey(vaultKey);
-
-        // Clear temp storage
-        sessionStorage.removeItem('vault_key_change');
+        await setSessionVaultKey(pendingChangeVaultKey);
 
         // Reset form
         setOldPin('');
         setNewPin('');
         setConfirmPin('');
+        setPendingChangeVaultKey(null);
         setPinChangeStep('old');
         setState('view');
       } catch (err) {
@@ -249,6 +218,7 @@ export function Settings({ onBack }: SettingsProps) {
                 className="link-button"
                 onClick={() => {
                   setOldPin('');
+                  setPendingChangeVaultKey(null);
                   setState('view');
                 }}
                 disabled={isLoading}
@@ -285,6 +255,8 @@ export function Settings({ onBack }: SettingsProps) {
                 className="link-button"
                 onClick={() => {
                   setNewPin('');
+                  setError(null);
+                  setPendingChangeVaultKey(null);
                   setPinChangeStep('old');
                 }}
                 disabled={isLoading}

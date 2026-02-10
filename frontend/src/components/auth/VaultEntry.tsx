@@ -67,7 +67,7 @@ export function VaultEntry({ onSuccess, isLoading = false, error, onClearError }
       // Store KDF salt in sessionStorage for later PIN use
       sessionStorage.setItem('vault_kdf_salt', data.kdf_salt);
 
-      // Set session key for current session convenience
+      // Cache key in memory for current runtime.
       await setSessionVaultKey(vaultKey);
 
       // Clear sensitive words

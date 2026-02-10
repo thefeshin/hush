@@ -40,13 +40,7 @@ export function PINEntry({
     // Unlock mode: verify PIN
     const vaultKey = await retrieveVaultKey(pin);
     if (vaultKey) {
-      // Store KDF salt from sessionStorage to vault key for later use
-      const kdfSalt = sessionStorage.getItem('vault_kdf_salt');
-      if (kdfSalt) {
-        sessionStorage.setItem('vault_kdf_salt', kdfSalt);
-      }
-
-      // Store in session for auto-unlock on refresh
+      // Cache in memory for current runtime.
       await setSessionVaultKey(vaultKey);
       onSuccess(vaultKey);
     } else {

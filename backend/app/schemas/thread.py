@@ -5,7 +5,7 @@ Thread schemas - server only sees encrypted blobs
 from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 
 class ThreadCreate(BaseModel):
@@ -15,8 +15,8 @@ class ThreadCreate(BaseModel):
     iv: str                     # Base64-encoded IV
     # Participant UUIDs (plaintext, for thread discovery)
     # These are not secret - user IDs are shared for contact lookup
-    participant_1: Optional[UUID] = None  # Lower UUID (sorted)
-    participant_2: Optional[UUID] = None  # Higher UUID (sorted)
+    participant_1: UUID  # Lower UUID (sorted)
+    participant_2: UUID  # Higher UUID (sorted)
 
 
 class ThreadResponse(BaseModel):
