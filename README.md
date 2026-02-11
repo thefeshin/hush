@@ -16,6 +16,25 @@ English | [فارسی](README.fa.md) | [License](LICENSE)
 HUSH is a self-hosted private messaging vault focused on client-side cryptography and minimal server trust.
 The backend relays encrypted payloads and stores only metadata needed for routing, discovery, and session management.
 
+## Table of Contents
+
+- [What HUSH Provides](#what-hush-provides)
+- [Repository Layout](#repository-layout)
+- [Security and Realtime Notes](#security-and-realtime-notes)
+- [Prerequisites](#prerequisites)
+- [Online Deployment (Connected Host)](#online-deployment-connected-host)
+- [Guided deployment (recommended)](#guided-deployment-recommended)
+- [Manual Docker deployment](#manual-docker-deployment)
+- [Local Development (Without Full Docker Stack)](#local-development-without-full-docker-stack)
+- [Offline Deployment (Air-Gapped)](#offline-deployment-air-gapped)
+- [On internet-connected machine](#on-internet-connected-machine)
+- [Transfer to air-gapped machine](#transfer-to-air-gapped-machine)
+- [On air-gapped machine](#on-air-gapped-machine)
+- [Operations](#operations)
+- [Current Status](#current-status)
+- [Planned Improvements](#planned-improvements)
+- [Language and License](#language-and-license)
+
 ## What HUSH Provides
 
 - End-to-end encryption workflow in the client (Argon2id + HKDF + AES-GCM).
@@ -48,6 +67,7 @@ The backend relays encrypted payloads and stores only metadata needed for routin
 - Python 3
 - Node.js + npm (for local frontend dev)
 - OpenSSL (for local cert generation)
+- For air-gapped bootstrap: Ubuntu 22.04 (jammy) amd64
 
 ## Online Deployment (Connected Host)
 
@@ -107,26 +127,39 @@ Frontend runs at `http://localhost:3000` (configured in `frontend/vite.config.ts
 
 Linux/macOS:
 ```bash
-./offline/build-bundle.sh
+bash ./offline/build-bundle.sh
 ```
 
-This produces `offline/hush-offline-bundle.tar` and generates `.env`.
+This produces:
+- `offline/hush-offline-bundle.tar` (all required Docker images)
+- `offline/pkgs/docker/*.deb` (latest Docker engine packages from Docker Jammy repo)
+- `offline/pkgs/python/*.deb` (python3/pip/venv dependency closure)
+- `offline/pkgs/all/*.deb` (union package set for offline install)
+- `offline/install-system-deps.sh`
+- `offline/manifests/*.txt`, `offline/bundle-manifest.txt`, `offline/SHA256SUMS`
+- `.env`
 
 ### Transfer to air-gapped machine
 
 Copy:
 - `offline/hush-offline-bundle.tar`
+- `offline/pkgs/`
 - `docker-compose.yml`
 - `nginx/`
+- `offline/install-system-deps.sh`
 - `offline/deploy-offline.sh`
-- `.env` (if you are not regenerating it on target)
+- `offline/manifests/`, `offline/bundle-manifest.txt`, `offline/SHA256SUMS`
+- `.env`
 
 ### On air-gapped machine
 
 Linux/macOS:
 ```bash
-./offline/deploy-offline.sh
+bash ./offline/install-system-deps.sh
+bash ./offline/deploy-offline.sh
 ```
+
+`install-system-deps.sh` installs Docker Engine + Compose plugin + Python3/PIP/venv from local `.deb` files only (no network).
 
 ## Operations
 

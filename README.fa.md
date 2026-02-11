@@ -16,6 +16,26 @@
 HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزنگاری سمت کلاینت و حداقل‌سازی اعتماد به سرور تمرکز دارد.
 سرور فقط payloadهای رمز‌شده را رله می‌کند و تنها متادیتای لازم برای مسیردهی، کشف گفتگو و مدیریت نشست را نگه می‌دارد.
 
+## فهرست مطالب
+
+- [HUSH چه امکاناتی می‌دهد؟](#fa-features)
+- [ساختار مخزن](#fa-repo-layout)
+- [نکات امنیت و Realtime](#fa-security-realtime)
+- [پیش‌نیازها](#fa-prerequisites)
+- [استقرار آنلاین (ماشین متصل به اینترنت)](#fa-online-deployment)
+- [روش پیشنهادی (تعامل‌محور)](#fa-online-guided)
+- [روش دستی Docker](#fa-online-manual)
+- [توسعه محلی (بدون استک کامل Docker)](#fa-local-development)
+- [استقرار آفلاین (Air-Gapped)](#fa-offline-deployment)
+- [روی ماشین دارای اینترنت](#fa-offline-build)
+- [انتقال به ماشین آفلاین](#fa-offline-transfer)
+- [اجرای استقرار روی ماشین آفلاین](#fa-offline-run)
+- [عملیات روزمره](#fa-operations)
+- [وضعیت فعلی پروژه](#fa-current-status)
+- [برنامه‌های بعدی](#fa-next-steps)
+- [زبان و مجوز](#fa-language-license)
+
+<a id="fa-features"></a>
 ## HUSH چه امکاناتی می‌دهد؟
 
 - جریان رمزنگاری انتها-به-انتها در کلاینت (Argon2id + HKDF + AES-GCM)
@@ -24,6 +44,7 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - فرانت PWA و استقرار Docker-first
 - اسکریپت‌های استقرار آفلاین/Air-Gapped
 
+<a id="fa-repo-layout"></a>
 ## ساختار مخزن
 
 - `backend/`: API و WebSocket (FastAPI)
@@ -32,6 +53,7 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - `offline/`: ساخت bundle و استقرار آفلاین
 - `nginx/`: پروکسی و TLS
 
+<a id="fa-security-realtime"></a>
 ## نکات امنیت و Realtime
 
 - احراز هویت WebSocket فقط از طریق cookie `access_token` انجام می‌شود.
@@ -42,15 +64,19 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
   - سقف ciphertext (پیام: 64 KiB decoded، متادیتای گفتگو: 16 KiB decoded)،
   - محدودیت‌های per-connection در WebSocket (سقف subscription + rate guard پیام ورودی).
 
+<a id="fa-prerequisites"></a>
 ## پیش‌نیازها
 
 - Docker و Docker Compose
 - Python 3
 - Node.js و npm (برای توسعه محلی فرانت)
 - OpenSSL
+- برای bootstrap آفلاین: Ubuntu 22.04 (jammy) معماری amd64
 
+<a id="fa-online-deployment"></a>
 ## استقرار آنلاین (ماشین متصل به اینترنت)
 
+<a id="fa-online-guided"></a>
 ### روش پیشنهادی (تعامل‌محور)
 
 Linux/macOS:
@@ -62,6 +88,7 @@ chmod +x ./hush.sh
 در منو، حالت Docker را انتخاب کنید.  
 دسترسی: `https://localhost`
 
+<a id="fa-online-manual"></a>
 ### روش دستی Docker
 
 ```bash
@@ -70,6 +97,7 @@ docker compose up -d
 docker compose ps
 ```
 
+<a id="fa-local-development"></a>
 ## توسعه محلی (بدون استک کامل Docker)
 
 1. اجرای PostgreSQL:
@@ -102,33 +130,51 @@ npm run dev
 
 فرانت روی `http://localhost:3000` بالا می‌آید.
 
+<a id="fa-offline-deployment"></a>
 ## استقرار آفلاین (Air-Gapped)
 
+<a id="fa-offline-build"></a>
 ### روی ماشین دارای اینترنت
 
 Linux/macOS:
 ```bash
-./offline/build-bundle.sh
+bash ./offline/build-bundle.sh
 ```
 
-خروجی اصلی: `offline/hush-offline-bundle.tar` به همراه `.env`
+خروجی‌ها:
+- `offline/hush-offline-bundle.tar` (همه Docker imageهای موردنیاز)
+- `offline/pkgs/docker/*.deb` (جدیدترین پکیج‌های Docker از مخزن Jammy)
+- `offline/pkgs/python/*.deb` (وابستگی‌های python3/pip/venv)
+- `offline/pkgs/all/*.deb` (مجموع همه پکیج‌ها برای نصب آفلاین)
+- `offline/install-system-deps.sh`
+- `offline/manifests/*.txt`، `offline/bundle-manifest.txt`، `offline/SHA256SUMS`
+- `.env`
 
+<a id="fa-offline-transfer"></a>
 ### انتقال به ماشین آفلاین
 
 فایل‌ها/پوشه‌های زیر را منتقل کنید:
 - `offline/hush-offline-bundle.tar`
+- `offline/pkgs/`
 - `docker-compose.yml`
 - `nginx/`
+- `offline/install-system-deps.sh`
 - `offline/deploy-offline.sh`
-- `.env` (در صورت استفاده از همان تنظیمات)
+- `offline/manifests/`، `offline/bundle-manifest.txt`، `offline/SHA256SUMS`
+- `.env`
 
+<a id="fa-offline-run"></a>
 ### اجرای استقرار روی ماشین آفلاین
 
 Linux/macOS:
 ```bash
-./offline/deploy-offline.sh
+bash ./offline/install-system-deps.sh
+bash ./offline/deploy-offline.sh
 ```
 
+اسکریپت `install-system-deps.sh`، Docker Engine + Compose plugin + Python3/PIP/venv را فقط از `.deb`های محلی نصب می‌کند (بدون شبکه).
+
+<a id="fa-operations"></a>
 ## عملیات روزمره
 
 ```bash
@@ -138,6 +184,7 @@ docker compose restart backend
 docker compose down -v
 ```
 
+<a id="fa-current-status"></a>
 ## وضعیت فعلی پروژه
 
 فاز P0 در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
@@ -163,12 +210,14 @@ docker compose down -v
 - اتصال `WebSocket` با `?token=...` دیگر پشتیبانی نمی‌شود.
 - payload جدید `subscribe_user` به شکل `{"type":"subscribe_user"}` است.
 
+<a id="fa-next-steps"></a>
 ## برنامه‌های بعدی
 
 1. افزودن تست‌های یکپارچه end-to-end برای سناریوهای reconnect/resubscribe با WebSocket واقعی.
 2. افزودن امکان تنظیم‌پذیری deployment-level برای محدودیت‌های payload/rate در صورت نیاز عملیاتی.
 3. گسترش تست‌های frontend برای بازپخش صف پیام در شرایط اتصال ناپایدار.
 
+<a id="fa-language-license"></a>
 ## زبان و مجوز
 
 - نسخه انگلیسی: `README.md`
