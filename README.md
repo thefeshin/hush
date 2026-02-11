@@ -24,31 +24,6 @@ The backend relays encrypted payloads and stores only metadata needed for routin
 - PWA frontend and Docker-first deployment.
 - Air-gapped/offline bundle deployment scripts.
 
-## Current Status
-
-P0 hardening is complete as of **February 10, 2026**:
-- strict server-side participant authorization is enforced for REST and WebSocket message paths,
-- WebSocket identity binding no longer trusts client-supplied `user_id`,
-- WebSocket query-token auth is removed (cookie-only),
-- raw vault-key storage in `sessionStorage` is removed (memory-only runtime cache).
-
-P1 hardening is also complete as of **February 10, 2026**:
-- vault lock now preserves PIN setup by default,
-- REST fallback send path is aligned to `POST /api/messages`,
-- offline bundle scripts generate supported `FAILURE_MODE=ip_temp`,
-- backend startup fails fast on missing auth secrets or invalid failure mode,
-- `/health/db` now returns sanitized `503` on database failure.
-
-Post-P1 refactor/validation phases are complete as of **February 10, 2026**:
-- legacy thread/conversation compatibility layers were removed in favor of conversation-first frontend state,
-- realtime connection lifecycle is centralized under a single provider-owned path,
-- strict payload guards are enforced for REST/WebSocket encrypted fields (base64 validation, IV length, ciphertext caps),
-- WebSocket now applies per-connection subscription caps and inbound message rate guards.
-
-Breaking client contract changes:
-- WebSocket no longer accepts `?token=...`.
-- `subscribe_user` payload is now `{"type":"subscribe_user"}` (no `user_id` field).
-
 ## Repository Layout
 
 - `backend/`: FastAPI API + WebSocket relay.
@@ -161,6 +136,31 @@ docker compose ps
 docker compose restart backend
 docker compose down -v
 ```
+
+## Current Status
+
+P0 hardening is complete as of **February 10, 2026**:
+- strict server-side participant authorization is enforced for REST and WebSocket message paths,
+- WebSocket identity binding no longer trusts client-supplied `user_id`,
+- WebSocket query-token auth is removed (cookie-only),
+- raw vault-key storage in `sessionStorage` is removed (memory-only runtime cache).
+
+P1 hardening is also complete as of **February 10, 2026**:
+- vault lock now preserves PIN setup by default,
+- REST fallback send path is aligned to `POST /api/messages`,
+- offline bundle scripts generate supported `FAILURE_MODE=ip_temp`,
+- backend startup fails fast on missing auth secrets or invalid failure mode,
+- `/health/db` now returns sanitized `503` on database failure.
+
+Post-P1 refactor/validation phases are complete as of **February 10, 2026**:
+- legacy thread/conversation compatibility layers were removed in favor of conversation-first frontend state,
+- realtime connection lifecycle is centralized under a single provider-owned path,
+- strict payload guards are enforced for REST/WebSocket encrypted fields (base64 validation, IV length, ciphertext caps),
+- WebSocket now applies per-connection subscription caps and inbound message rate guards.
+
+Breaking client contract changes:
+- WebSocket no longer accepts `?token=...`.
+- `subscribe_user` payload is now `{"type":"subscribe_user"}` (no `user_id` field).
 
 ## Planned Improvements
 

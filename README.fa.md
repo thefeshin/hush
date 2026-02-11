@@ -24,31 +24,6 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - فرانت PWA و استقرار Docker-first
 - اسکریپت‌های استقرار آفلاین/Air-Gapped
 
-## وضعیت فعلی پروژه
-
-فاز P0 در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
-- کنترل دسترسی مبتنی بر عضویت گفتگو برای مسیرهای REST و WebSocket اعمال شد،
-- مسیر `subscribe_user` دیگر به `user_id` ارسالی کلاینت اعتماد نمی‌کند،
-- احراز هویت WebSocket با query token حذف شد (فقط cookie)،
-- نگهداری raw vault key در `sessionStorage` حذف و به حافظه‌ی runtime محدود شد.
-
-فاز P1 نیز در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
-- قفل کردن Vault به‌صورت پیش‌فرض تنظیم PIN را حذف نمی‌کند،
-- مسیر fallback پیام‌ها با `POST /api/messages` هم‌راستا شد،
-- اسکریپت‌های آفلاین مقدار معتبر `FAILURE_MODE=ip_temp` تولید می‌کنند،
-- backend در صورت نبود secretهای ضروری یا `FAILURE_MODE` نامعتبر، در startup متوقف می‌شود،
-- مسیر `/health/db` هنگام خطای دیتابیس، پاسخ sanitize‌شده با `503` می‌دهد.
-
-فازهای پس از P1 (ریفکتور/اعتبارسنجی) نیز در **۱۰ فوریه ۲۰۲۶** تکمیل شده‌اند:
-- لایه‌های ناسازگارِ thread/conversation حذف و وضعیت frontend به مدل conversation-first یکپارچه شد،
-- چرخه‌عمر realtime/WebSocket در یک مسیر مرکزی مدیریت می‌شود،
-- برای payloadهای رمز‌شده در REST/WebSocket اعتبارسنجی سخت‌گیرانه اعمال شد (base64 strict، طول دقیق IV، سقف ciphertext)،
-- برای WebSocket محدودیت اشتراک گفتگو به ازای هر اتصال و rate guard برای پیام‌های ورودی اضافه شد.
-
-تغییرات ناسازگار با کلاینت‌های قدیمی:
-- اتصال `WebSocket` با `?token=...` دیگر پشتیبانی نمی‌شود.
-- payload جدید `subscribe_user` به شکل `{"type":"subscribe_user"}` است.
-
 ## ساختار مخزن
 
 - `backend/`: API و WebSocket (FastAPI)
@@ -162,6 +137,31 @@ docker compose ps
 docker compose restart backend
 docker compose down -v
 ```
+
+## وضعیت فعلی پروژه
+
+فاز P0 در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
+- کنترل دسترسی مبتنی بر عضویت گفتگو برای مسیرهای REST و WebSocket اعمال شد،
+- مسیر `subscribe_user` دیگر به `user_id` ارسالی کلاینت اعتماد نمی‌کند،
+- احراز هویت WebSocket با query token حذف شد (فقط cookie)،
+- نگهداری raw vault key در `sessionStorage` حذف و به حافظه‌ی runtime محدود شد.
+
+فاز P1 نیز در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
+- قفل کردن Vault به‌صورت پیش‌فرض تنظیم PIN را حذف نمی‌کند،
+- مسیر fallback پیام‌ها با `POST /api/messages` هم‌راستا شد،
+- اسکریپت‌های آفلاین مقدار معتبر `FAILURE_MODE=ip_temp` تولید می‌کنند،
+- backend در صورت نبود secretهای ضروری یا `FAILURE_MODE` نامعتبر، در startup متوقف می‌شود،
+- مسیر `/health/db` هنگام خطای دیتابیس، پاسخ sanitize‌شده با `503` می‌دهد.
+
+فازهای پس از P1 (ریفکتور/اعتبارسنجی) نیز در **۱۰ فوریه ۲۰۲۶** تکمیل شده‌اند:
+- لایه‌های ناسازگارِ thread/conversation حذف و وضعیت frontend به مدل conversation-first یکپارچه شد،
+- چرخه‌عمر realtime/WebSocket در یک مسیر مرکزی مدیریت می‌شود،
+- برای payloadهای رمز‌شده در REST/WebSocket اعتبارسنجی سخت‌گیرانه اعمال شد (base64 strict، طول دقیق IV، سقف ciphertext)،
+- برای WebSocket محدودیت اشتراک گفتگو به ازای هر اتصال و rate guard برای پیام‌های ورودی اضافه شد.
+
+تغییرات ناسازگار با کلاینت‌های قدیمی:
+- اتصال `WebSocket` با `?token=...` دیگر پشتیبانی نمی‌شود.
+- payload جدید `subscribe_user` به شکل `{"type":"subscribe_user"}` است.
 
 ## برنامه‌های بعدی
 
