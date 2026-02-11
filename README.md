@@ -84,11 +84,6 @@ chmod +x ./hush.sh
 ./hush.sh
 ```
 
-Windows PowerShell:
-```powershell
-.\hush.ps1
-```
-
 Choose Docker mode in the prompt. Access app at `https://localhost`.
 
 ### Manual Docker deployment
@@ -140,11 +135,6 @@ Linux/macOS:
 ./offline/build-bundle.sh
 ```
 
-Windows:
-```powershell
-.\offline\build-bundle.ps1
-```
-
 This produces `offline/hush-offline-bundle.tar` and generates `.env`.
 
 ### Transfer to air-gapped machine
@@ -153,7 +143,7 @@ Copy:
 - `offline/hush-offline-bundle.tar`
 - `docker-compose.yml`
 - `nginx/`
-- `offline/deploy-offline.sh` or `offline/deploy-offline.ps1`
+- `offline/deploy-offline.sh`
 - `.env` (if you are not regenerating it on target)
 
 ### On air-gapped machine
@@ -161,11 +151,6 @@ Copy:
 Linux/macOS:
 ```bash
 ./offline/deploy-offline.sh
-```
-
-Windows:
-```powershell
-.\offline\deploy-offline.ps1
 ```
 
 ## Operations

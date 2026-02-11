@@ -84,11 +84,6 @@ chmod +x ./hush.sh
 ./hush.sh
 ```
 
-Windows PowerShell:
-```powershell
-.\hush.ps1
-```
-
 در منو، حالت Docker را انتخاب کنید.  
 دسترسی: `https://localhost`
 
@@ -141,11 +136,6 @@ Linux/macOS:
 ./offline/build-bundle.sh
 ```
 
-Windows:
-```powershell
-.\offline\build-bundle.ps1
-```
-
 خروجی اصلی: `offline/hush-offline-bundle.tar` به همراه `.env`
 
 ### انتقال به ماشین آفلاین
@@ -154,7 +144,7 @@ Windows:
 - `offline/hush-offline-bundle.tar`
 - `docker-compose.yml`
 - `nginx/`
-- `offline/deploy-offline.sh` یا `offline/deploy-offline.ps1`
+- `offline/deploy-offline.sh`
 - `.env` (در صورت استفاده از همان تنظیمات)
 
 ### اجرای استقرار روی ماشین آفلاین
@@ -162,11 +152,6 @@ Windows:
 Linux/macOS:
 ```bash
 ./offline/deploy-offline.sh
-```
-
-Windows:
-```powershell
-.\offline\deploy-offline.ps1
 ```
 
 ## عملیات روزمره
