@@ -29,13 +29,13 @@ export {
   getKdfParams
 } from './kdf';
 
-// Thread keys
+// Conversation keys
 export {
-  computeThreadId,
-  deriveThreadKey,
+  computeConversationId,
+  deriveConversationKey,
   isValidUUID,
   generateUUID
-} from './thread-key';
+} from './conversation-key';
 
 // AES encryption
 export {
@@ -64,10 +64,10 @@ export type {
   Base64String,
   EncryptedData,
   VaultKey,
-  ThreadKey,
+  ConversationKey,
   KdfParams,
   MessagePayload,
-  ThreadMetadata,
+  ConversationMetadata,
   IdentityPayload,
   ContactPayload
 } from '../types/crypto';

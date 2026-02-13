@@ -25,7 +25,7 @@ export function MessageComposer({ conversationId, participantId }: Props) {
   const user = useAuthStore(state => state.user);
   const { addPendingMessage, markMessageSent, markMessageFailed } = useMessageStore();
   const { updateLastMessage } = useConversationStore();
-  const { getThreadKey, encryptMessage } = useCrypto();
+  const { getConversationKey, encryptMessage } = useCrypto();
   const { sendMessage, isConnected } = useWebSocket();
 
   // Focus input on mount and when conversation changes.
@@ -61,22 +61,28 @@ export function MessageComposer({ conversationId, participantId }: Props) {
 
       const payloadString = JSON.stringify(payload);
 
-      // Get thread key and encrypt
-      const threadKey = await getThreadKey(user.id, participantId);
-      const encrypted = await encryptMessage(threadKey, payloadString);
+      // Get conversation key and encrypt
+      const conversationKey = await getConversationKey(user.id, participantId);
+      const encrypted = await encryptMessage(conversationKey, payloadString);
 
       if (isConnected) {
-        // Send via WebSocket
-        const result = await sendMessage(conversationId, encrypted);
+        try {
+          const result = await sendMessage(conversationId, encrypted, participantId);
 
-        // Save to local storage
-        await saveMessage(result.id, conversationId, encrypted, payload.timestamp);
+          // Save to local storage
+          await saveMessage(result.id, conversationId, encrypted, payload.timestamp);
 
-        // Update message with real ID
-        markMessageSent(tempId, result.id);
+          // Update message with real ID
+          markMessageSent(tempId, result.id);
+        } catch {
+          // Silent fallback: queue for retry and keep optimistic UX.
+          await queueMessage(conversationId, tempId, encrypted, participantId);
+          await saveMessage(tempId, conversationId, encrypted, payload.timestamp);
+          markMessageSent(tempId, tempId);
+        }
       } else {
         // Queue for later when offline
-        await queueMessage(conversationId, tempId, encrypted);
+        await queueMessage(conversationId, tempId, encrypted, participantId);
 
         // Save to local storage with the same temporary ID for deterministic replay reconciliation
         await saveMessage(tempId, conversationId, encrypted, payload.timestamp);

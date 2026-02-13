@@ -27,36 +27,14 @@ async def init_db():
 
 
 async def _init_schema(conn: asyncpg.Connection):
-    """Create tables if they don't exist"""
+    """Create conversation-first schema from scratch."""
     await conn.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
 
     await conn.execute("""
-        CREATE TABLE IF NOT EXISTS threads (
+        CREATE TABLE IF NOT EXISTS conversations (
             id UUID PRIMARY KEY,
-            ciphertext BYTEA NOT NULL,
-            iv BYTEA NOT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
-    """)
-
-    await conn.execute("""
-        CREATE TABLE IF NOT EXISTS messages (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            thread_id UUID NOT NULL,
-            ciphertext BYTEA NOT NULL,
-            iv BYTEA NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    await conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_messages_thread_id
-            ON messages(thread_id)
-    """)
-
-    await conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_messages_created_at
-            ON messages(thread_id, created_at)
     """)
 
     await conn.execute("""
@@ -120,26 +98,40 @@ async def _init_schema(conn: asyncpg.Connection):
             ON refresh_tokens(token_hash)
     """)
 
-    # Thread participants table for thread discovery
+    # Conversation participants table for discovery and authorization
     await conn.execute("""
-        CREATE TABLE IF NOT EXISTS thread_participants (
-            thread_id UUID PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
-            participant_1 UUID NOT NULL,
-            participant_2 UUID NOT NULL,
+        CREATE TABLE IF NOT EXISTS conversation_participants (
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            PRIMARY KEY (conversation_id, user_id)
+        )
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_conversation_participants_user
+            ON conversation_participants(user_id)
+    """)
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            ciphertext BYTEA NOT NULL,
+            iv BYTEA NOT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
     """)
 
     await conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_thread_participants_p1
-            ON thread_participants(participant_1)
-            WHERE participant_1 IS NOT NULL
+        CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
+            ON messages(conversation_id)
     """)
 
     await conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_thread_participants_p2
-            ON thread_participants(participant_2)
-            WHERE participant_2 IS NOT NULL
+        CREATE INDEX IF NOT EXISTS idx_messages_created_at
+            ON messages(conversation_id, created_at)
     """)
 
 

@@ -3,13 +3,14 @@
  */
 
 import { create } from 'zustand';
-import { saveThread, loadThreads, loadThread } from '../services/storage';
-import { discoverThreads as apiDiscoverThreads } from '../services/api';
+import { saveConversation, loadConversations, loadConversation } from '../services/storage';
+import { discoverConversations as apiDiscoverConversations } from '../services/api';
 import { getSyncService } from '../services/sync';
-import type { EncryptedData, ThreadMetadata } from '../types/crypto';
+import { useContactStore } from './contactStore';
+import type { EncryptedData, ConversationMetadata } from '../types/crypto';
 
 export interface Conversation {
-  conversationId: string;      // was threadId
+  conversationId: string;
   participantId: string;       // The other participant's user ID
   participantUsername: string; // The other participant's username
   createdAt: number;
@@ -26,13 +27,9 @@ interface ConversationState {
   loadAllConversations: (
     myUserId: string,
     contacts: Array<{ id: string; username: string }>,
-    computeConversationId: (id1: string, id2: string) => Promise<string>,
     decryptFn: (encrypted: EncryptedData) => Promise<any>
   ) => Promise<void>;
-  discoverConversations: (
-    myUserId: string,
-    decryptFn: (encrypted: EncryptedData) => Promise<any>
-  ) => Promise<string[]>;
+  discoverConversations: () => Promise<string[]>;
   handleUnknownConversation: (
     conversationId: string,
     myUserId: string,
@@ -52,7 +49,47 @@ interface ConversationState {
   incrementUnread: (conversationId: string) => void;
   getConversation: (conversationId: string) => Conversation | undefined;
   getConversationByParticipant: (participantId: string) => Conversation | undefined;
+  upsertConversation: (conversation: Conversation) => void;
   addConversation: (conversation: Conversation) => void;
+}
+
+function isPlaceholderName(name: string, participantId: string): boolean {
+  return !name || name === 'Unknown' || name === participantId;
+}
+
+function mergeConversationLists(existing: Conversation[], incoming: Conversation[]): Conversation[] {
+  const byId = new Map<string, Conversation>();
+
+  for (const conversation of existing) {
+    byId.set(conversation.conversationId, conversation);
+  }
+
+  for (const conversation of incoming) {
+    const current = byId.get(conversation.conversationId);
+    if (!current) {
+      byId.set(conversation.conversationId, conversation);
+      continue;
+    }
+
+    const participantId = conversation.participantId || current.participantId;
+    const incomingName = conversation.participantUsername || '';
+    const currentName = current.participantUsername || '';
+    const participantUsername = !isPlaceholderName(incomingName, participantId)
+      ? incomingName
+      : (!isPlaceholderName(currentName, participantId) ? currentName : (incomingName || currentName || participantId));
+
+    byId.set(conversation.conversationId, {
+      ...current,
+      ...conversation,
+      participantId,
+      participantUsername,
+      createdAt: Math.min(current.createdAt, conversation.createdAt),
+      lastMessageAt: Math.max(current.lastMessageAt, conversation.lastMessageAt),
+      unreadCount: Math.max(current.unreadCount, conversation.unreadCount)
+    });
+  }
+
+  return Array.from(byId.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -60,47 +97,47 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   activeConversationId: null,
   isLoading: false,
 
-  loadAllConversations: async (myUserId, contacts, computeConversationId, decryptFn) => {
+  loadAllConversations: async (myUserId, contacts, decryptFn) => {
     set({ isLoading: true });
 
     try {
-      // Compute expected conversation IDs for all contacts
-      const expectedConversationIds = new Map<string, { id: string; username: string }>();
+      const contactById = new Map(contacts.map(contact => [contact.id, contact.username]));
 
-      for (const contact of contacts) {
-        const conversationId = await computeConversationId(myUserId, contact.id);
-        expectedConversationIds.set(conversationId, contact);
-      }
-
-      // Load stored conversations (still uses 'threads' object store in IndexedDB)
-      const stored = await loadThreads();
+      const stored = await loadConversations();
       const conversations: Conversation[] = [];
 
-      for (const { threadId, encrypted, lastMessageAt } of stored) {
-        // Check if this conversation belongs to a known contact
-        const contact = expectedConversationIds.get(threadId);
+      for (const { conversationId, encrypted, lastMessageAt } of stored) {
+        try {
+          const metadata = await decryptFn(encrypted);
+          const participants: string[] = Array.isArray(metadata?.participants) ? metadata.participants : [];
+          const participantId = participants.find((participant) => participant !== myUserId) || '';
 
-        if (contact) {
-          try {
-            const metadata = await decryptFn(encrypted);
-            conversations.push({
-              conversationId: threadId,
-              participantId: contact.id,
-              participantUsername: contact.username,
-              createdAt: metadata.created_at,
-              lastMessageAt,
-              unreadCount: 0
-            });
-          } catch {
-            // Conversation from different vault, skip
+          if (!participantId) {
+            continue;
           }
+
+          const participantUsername =
+            contactById.get(participantId)
+            || (metadata?.created_by?.user_id === participantId ? metadata?.created_by?.display_name : '')
+            || participantId;
+
+          conversations.push({
+            conversationId,
+            participantId,
+            participantUsername,
+            createdAt: metadata?.created_at || lastMessageAt,
+            lastMessageAt,
+            unreadCount: 0
+          });
+        } catch {
+          // Conversation from different vault or invalid metadata, skip.
         }
       }
 
-      // Sort by last message time
-      conversations.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-
-      set({ conversations, isLoading: false });
+      set(state => ({
+        conversations: mergeConversationLists(state.conversations, conversations),
+        isLoading: false
+      }));
     } catch (err) {
       console.error('Failed to load conversations', err);
       set({ isLoading: false });
@@ -118,7 +155,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
 
     // Create conversation metadata
-    const metadata: ThreadMetadata = {
+    const metadata: ConversationMetadata = {
       participants: [myUserId, otherUserId].sort() as [string, string],
       created_by: {
         user_id: myUserId,
@@ -127,9 +164,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       created_at: Date.now()
     };
 
-    // Encrypt and save locally (still uses 'threads' object store)
+    // Encrypt and save locally
     const encrypted = await encryptFn(metadata);
-    await saveThread(conversationId, encrypted, Date.now());
+    await saveConversation(conversationId, encrypted, Date.now());
 
     const conversation: Conversation = {
       conversationId,
@@ -141,7 +178,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     };
 
     set(state => ({
-      conversations: [conversation, ...state.conversations],
+      conversations: mergeConversationLists(state.conversations, [conversation]),
       activeConversationId: conversationId
     }));
 
@@ -198,64 +235,61 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
    * Fetches all conversation IDs where the user is a participant
    * Returns list of discovered conversation IDs
    */
-  discoverConversations: async (myUserId, decryptFn) => {
-    const { conversations: existingConversations } = get();
-    const existingIds = new Set(existingConversations.map(c => c.conversationId));
+  discoverConversations: async () => {
+    const contacts = useContactStore.getState().contacts;
+    const contactById = new Map(contacts.map(contact => [contact.id, contact.username]));
+    const existingByConversationId = new Map(
+      get().conversations.map(conversation => [conversation.conversationId, conversation])
+    );
 
     try {
-      // Fetch conversation IDs from server (API still uses 'threads' endpoint)
-      const conversationIds = await apiDiscoverThreads();
-
-      // Filter out conversations we already have
-      const newConversationIds = conversationIds.filter(id => !existingIds.has(id));
-
-      // Backfill missing thread metadata from server.
-      if (newConversationIds.length > 0) {
-        const syncService = getSyncService();
-        const serverThreads = await syncService.queryThreads(newConversationIds);
-        for (const thread of serverThreads) {
-          await saveThread(
-            thread.id,
-            { ciphertext: thread.ciphertext, iv: thread.iv },
-            new Date(thread.created_at).getTime()
-          );
-        }
+      const discovered = await apiDiscoverConversations();
+      const discoveredIds = discovered.map(item => item.conversation_id);
+      if (discoveredIds.length === 0) {
+        return [];
       }
 
-      // For each new conversation, try to load from local storage
+      const syncService = getSyncService();
+      const serverConversations = await syncService.queryConversations(discoveredIds);
+      const serverCreatedAtById = new Map(
+        serverConversations.map(item => [item.id, new Date(item.created_at).getTime()])
+      );
+
       const newConversations: Conversation[] = [];
+      for (const item of discovered) {
+        const conversationId = item.conversation_id;
+        const existingConversation = existingByConversationId.get(conversationId);
+        const participantId = item.other_user_id || existingConversation?.participantId || '';
 
-      for (const conversationId of newConversationIds) {
-        try {
-          const stored = await loadThread(conversationId);
-          if (stored) {
-            const metadata = await decryptFn(stored.encrypted);
-            // Find the other participant
-            const otherParticipant = metadata.participants.find((p: string) => p !== myUserId);
-
-            if (otherParticipant) {
-              newConversations.push({
-                conversationId,
-                participantId: otherParticipant,
-                participantUsername: 'Unknown', // Will update on lookup
-                createdAt: metadata.created_at,
-                lastMessageAt: stored.lastMessageAt,
-                unreadCount: 0
-              });
-            }
-          }
-        } catch (e) {
-          console.warn(`Could not load conversation ${conversationId}`, e);
+        if (!conversationId || !participantId) {
+          continue;
         }
+
+        const stored = await loadConversation(conversationId);
+        const lastMessageAt = stored?.lastMessageAt || serverCreatedAtById.get(conversationId) || Date.now();
+        const participantUsername =
+          contactById.get(participantId)
+          || item.other_username
+          || existingConversation?.participantUsername
+          || participantId;
+
+        newConversations.push({
+          conversationId,
+          participantId,
+          participantUsername,
+          createdAt: serverCreatedAtById.get(conversationId) || Date.now(),
+          lastMessageAt,
+          unreadCount: 0
+        });
       }
 
       if (newConversations.length > 0) {
         set(state => ({
-          conversations: [...state.conversations, ...newConversations].sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+          conversations: mergeConversationLists(state.conversations, newConversations)
         }));
       }
 
-      return newConversationIds;
+      return discoveredIds;
     } catch (err) {
       console.error('Failed to discover conversations', err);
       return [];
@@ -276,7 +310,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
     // Try to load conversation from server
     try {
-      const stored = await loadThread(conversationId);
+      const stored = await loadConversation(conversationId);
       if (stored) {
         const metadata = await decryptFn(stored.encrypted);
         // Verify this conversation involves us and the sender
@@ -288,17 +322,22 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           const otherParticipant = participants.find((p: string) => p !== myUserId);
 
           if (otherParticipant) {
+            const participantUsername =
+              metadata?.created_by?.user_id === otherParticipant
+                ? metadata?.created_by?.display_name || otherParticipant
+                : otherParticipant;
+
             const newConversation: Conversation = {
               conversationId,
               participantId: otherParticipant,
-              participantUsername: 'Unknown', // Will need to look up
+              participantUsername,
               createdAt: metadata.created_at,
               lastMessageAt: Date.now(),
-              unreadCount: 1 // First message!
+              unreadCount: 1
             };
 
             set(state => ({
-              conversations: [newConversation, ...state.conversations].sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+              conversations: mergeConversationLists(state.conversations, [newConversation])
             }));
           }
         }
@@ -312,15 +351,15 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
    * Add a new conversation to the store
    * Used when auto-discovering via WebSocket
    */
-  addConversation: (conversation: Conversation) => {
+  upsertConversation: (conversation: Conversation) => {
     set(state => {
-      // Check for duplicates
-      if (state.conversations.some(c => c.conversationId === conversation.conversationId)) {
-        return state;
-      }
       return {
-        conversations: [conversation, ...state.conversations].sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+        conversations: mergeConversationLists(state.conversations, [conversation])
       };
     });
+  },
+
+  addConversation: (conversation: Conversation) => {
+    get().upsertConversation(conversation);
   }
 }));

@@ -179,10 +179,10 @@ export async function getSalt(): Promise<string> {
 }
 
 /**
- * Discover all threads for the authenticated user
+ * Discover all conversations for the authenticated user
  */
-export async function discoverThreads(): Promise<string[]> {
-  const response = await fetch(`${API_BASE}/threads/discover`, {
+export async function discoverConversations(): Promise<Array<{ conversation_id: string; other_user_id: string; other_username: string }>> {
+  const response = await fetch(`${API_BASE}/conversations/discover`, {
     credentials: 'include'
   });
 
@@ -190,11 +190,25 @@ export async function discoverThreads(): Promise<string[]> {
     if (response.status === 401) {
       throw new AuthenticationError('not_authenticated', 'Not authenticated');
     }
-    throw new Error('Failed to discover threads');
+    throw new Error('Failed to discover conversations');
   }
 
   const data = await response.json();
-  return data.thread_ids;
+
+  if (Array.isArray(data.conversations)) {
+    return data.conversations;
+  }
+
+  // Backward compatibility with old backend payload shape.
+  if (Array.isArray(data.conversation_ids)) {
+    return data.conversation_ids.map((conversationId: string) => ({
+      conversation_id: conversationId,
+      other_user_id: '',
+      other_username: ''
+    }));
+  }
+
+  return [];
 }
 
 /**

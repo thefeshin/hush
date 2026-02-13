@@ -1,29 +1,29 @@
 /**
- * Thread key derivation using HKDF
- * Each thread has a unique key derived from vault key + participant UUIDs
+ * Conversation key derivation using HKDF
+ * Each conversation has a unique key derived from vault key + participant UUIDs
  */
 
 import { stringToBytes } from './encoding';
-import type { VaultKey, ThreadKey } from '../types/crypto';
+import type { ConversationKey, VaultKey } from '../types/crypto';
 
 // HKDF info string (domain separation)
-const HKDF_INFO = 'hush-thread';
+const HKDF_INFO = 'hush-conversation';
 
 /**
  * Sort two UUIDs alphabetically
- * Ensures same thread key regardless of who initiates
+ * Ensures same conversation key regardless of who initiates
  */
 function sortUUIDs(uuid1: string, uuid2: string): [string, string] {
   return uuid1 < uuid2 ? [uuid1, uuid2] : [uuid2, uuid1];
 }
 
 /**
- * Compute thread ID from two participant UUIDs
- * thread_id = SHA-256(sort(uuid_a, uuid_b))
+ * Compute conversation ID from two participant UUIDs
+ * conversation_id = SHA-256(sort(uuid_a, uuid_b))
  *
  * This is deterministic and the same for both participants
  */
-export async function computeThreadId(
+export async function computeConversationId(
   uuid1: string,
   uuid2: string
 ): Promise<string> {
@@ -43,18 +43,18 @@ export async function computeThreadId(
 }
 
 /**
- * Derive thread-specific encryption key using HKDF
+ * Derive conversation-specific encryption key using HKDF
  *
  * @param vaultKey - Master vault key
  * @param myUUID - Current user's UUID
  * @param otherUUID - Other participant's UUID
- * @returns ThreadKey for encrypting messages in this thread
+ * @returns ConversationKey for encrypting messages in this conversation
  */
-export async function deriveThreadKey(
+export async function deriveConversationKey(
   vaultKey: VaultKey,
   myUUID: string,
   otherUUID: string
-): Promise<ThreadKey> {
+): Promise<ConversationKey> {
   const [sortedA, sortedB] = sortUUIDs(myUUID, otherUUID);
   const combined = `${sortedA}:${sortedB}`;
 
@@ -62,8 +62,8 @@ export async function deriveThreadKey(
   const salt = stringToBytes(combined);
   const saltHash = await crypto.subtle.digest('SHA-256', salt as Uint8Array<ArrayBuffer>);
 
-  // Derive thread key using HKDF
-  const threadCryptoKey = await crypto.subtle.deriveKey(
+  // Derive conversation key using HKDF
+  const conversationCryptoKey = await crypto.subtle.deriveKey(
     {
       name: 'HKDF',
       hash: 'SHA-256',
@@ -79,12 +79,12 @@ export async function deriveThreadKey(
     ['encrypt', 'decrypt']
   );
 
-  // Compute thread ID
-  const threadId = await computeThreadId(myUUID, otherUUID);
+  // Compute conversation ID
+  const conversationId = await computeConversationId(myUUID, otherUUID);
 
   return {
-    key: threadCryptoKey,
-    threadId
+    key: conversationCryptoKey,
+    conversationId
   };
 }
 

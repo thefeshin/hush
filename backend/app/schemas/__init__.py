@@ -1,10 +1,24 @@
 # HUSH Pydantic Schemas
-from app.schemas.thread import ThreadCreate, ThreadResponse, ThreadQuery
+from app.schemas.conversation import ConversationQuery, ConversationResponse
 from app.schemas.message import MessageCreate, MessageResponse, MessageQuery
-from app.schemas.auth import AuthRequest, AuthResponse, AuthError
+from app.schemas.auth import (
+    AuthSuccess,
+    LoginRequest,
+    RegisterRequest,
+    UserLookupResponse,
+    UserResponse,
+    VaultAccessRequest,
+    VaultAccessResponse,
+)
 
 __all__ = [
-    "ThreadCreate", "ThreadResponse", "ThreadQuery",
+    "ConversationQuery", "ConversationResponse",
     "MessageCreate", "MessageResponse", "MessageQuery",
-    "AuthRequest", "AuthResponse", "AuthError",
+    "AuthSuccess",
+    "LoginRequest",
+    "RegisterRequest",
+    "UserLookupResponse",
+    "UserResponse",
+    "VaultAccessRequest",
+    "VaultAccessResponse",
 ]

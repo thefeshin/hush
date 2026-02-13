@@ -20,10 +20,10 @@ export interface VaultKey {
   raw: KeyMaterial; // Needed for HKDF derivation
 }
 
-// Thread key (derived from vault key + participant UUIDs)
-export interface ThreadKey {
+// Conversation key (derived from vault key + participant UUIDs)
+export interface ConversationKey {
   key: CryptoKey;
-  threadId: string;
+  conversationId: string;
 }
 
 // KDF parameters
@@ -43,8 +43,8 @@ export interface MessagePayload {
   timestamp: number;
 }
 
-// Thread metadata payload (before encryption)
-export interface ThreadMetadata {
+// Conversation metadata payload (before encryption)
+export interface ConversationMetadata {
   participants: [string, string];
   created_by: {
     user_id: string;

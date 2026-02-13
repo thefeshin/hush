@@ -26,11 +26,11 @@ interface HushDBSchema extends DBSchema {
     };
     indexes: { 'by-added': number };
   };
-  threads: {
-    key: string; // thread_id
+  conversations: {
+    key: string; // conversation_id
     value: {
-      threadId: string;
-      ciphertext: string; // encrypted thread metadata
+      conversationId: string;
+      ciphertext: string; // encrypted conversation metadata
       iv: string;
       lastMessageAt: number;
     };
@@ -40,17 +40,17 @@ interface HushDBSchema extends DBSchema {
     key: string; // message_id
     value: {
       id: string;
-      threadId: string;
+      conversationId: string;
       ciphertext: string;
       iv: string;
       createdAt: number;
     };
-    indexes: { 'by-thread': string; 'by-created': number };
+    indexes: { 'by-conversation': string; 'by-created': number };
   };
 }
 
 const DB_NAME = 'hush-vault';
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 let db: IDBPDatabase<HushDBSchema> | null = null;
 
@@ -71,18 +71,24 @@ export async function initDatabase(): Promise<void> {
         contactStore.createIndex('by-added', 'addedAt');
       }
 
-      // Threads store
-      if (!database.objectStoreNames.contains('threads')) {
-        const threadStore = database.createObjectStore('threads', { keyPath: 'threadId' });
-        threadStore.createIndex('by-last-message', 'lastMessageAt');
+      // Clean reset on pre-release schema changes.
+      // Keep identity and contacts, reset conversation/message history stores.
+      if (database.objectStoreNames.contains('threads' as any)) {
+        database.deleteObjectStore('threads' as any);
+      }
+      if (database.objectStoreNames.contains('conversations')) {
+        database.deleteObjectStore('conversations');
+      }
+      if (database.objectStoreNames.contains('messages')) {
+        database.deleteObjectStore('messages');
       }
 
-      // Messages store
-      if (!database.objectStoreNames.contains('messages')) {
-        const msgStore = database.createObjectStore('messages', { keyPath: 'id' });
-        msgStore.createIndex('by-thread', 'threadId');
-        msgStore.createIndex('by-created', 'createdAt');
-      }
+      const conversationStore = database.createObjectStore('conversations', { keyPath: 'conversationId' });
+      conversationStore.createIndex('by-last-message', 'lastMessageAt');
+
+      const msgStore = database.createObjectStore('messages', { keyPath: 'id' });
+      msgStore.createIndex('by-conversation', 'conversationId');
+      msgStore.createIndex('by-created', 'createdAt');
     }
   });
 }
@@ -163,18 +169,18 @@ export async function deleteContact(uuid: string): Promise<void> {
   await getDB().delete('contacts', uuid);
 }
 
-// ==================== Thread Operations ====================
+// ==================== Conversation Operations ====================
 
 /**
- * Save thread metadata (encrypted)
+ * Save conversation metadata (encrypted)
  */
-export async function saveThread(
-  threadId: string,
+export async function saveConversation(
+  conversationId: string,
   encrypted: EncryptedData,
   lastMessageAt: number = Date.now()
 ): Promise<void> {
-  await getDB().put('threads', {
-    threadId,
+  await getDB().put('conversations', {
+    conversationId,
     ciphertext: encrypted.ciphertext,
     iv: encrypted.iv,
     lastMessageAt
@@ -182,22 +188,22 @@ export async function saveThread(
 }
 
 /**
- * Load all threads
+ * Load all conversations
  */
-export async function loadThreads(): Promise<Array<{ threadId: string; encrypted: EncryptedData; lastMessageAt: number }>> {
-  const records = await getDB().getAllFromIndex('threads', 'by-last-message');
+export async function loadConversations(): Promise<Array<{ conversationId: string; encrypted: EncryptedData; lastMessageAt: number }>> {
+  const records = await getDB().getAllFromIndex('conversations', 'by-last-message');
   return records.reverse().map(r => ({
-    threadId: r.threadId,
+    conversationId: r.conversationId,
     encrypted: { ciphertext: r.ciphertext, iv: r.iv },
     lastMessageAt: r.lastMessageAt
   }));
 }
 
 /**
- * Load a single thread by ID
+ * Load a single conversation by ID
  */
-export async function loadThread(threadId: string): Promise<{ encrypted: EncryptedData; lastMessageAt: number } | null> {
-  const record = await getDB().get('threads', threadId);
+export async function loadConversation(conversationId: string): Promise<{ encrypted: EncryptedData; lastMessageAt: number } | null> {
+  const record = await getDB().get('conversations', conversationId);
   if (!record) return null;
 
   return {
@@ -213,13 +219,13 @@ export async function loadThread(threadId: string): Promise<{ encrypted: Encrypt
  */
 export async function saveMessage(
   id: string,
-  threadId: string,
+  conversationId: string,
   encrypted: EncryptedData,
   createdAt: number = Date.now()
 ): Promise<void> {
   await getDB().put('messages', {
     id,
-    threadId,
+    conversationId,
     ciphertext: encrypted.ciphertext,
     iv: encrypted.iv,
     createdAt
@@ -251,13 +257,19 @@ export async function replaceMessageId(oldId: string, newId: string): Promise<vo
 }
 
 /**
- * Load messages for a thread
+ * Load messages for a conversation
  */
 export async function loadMessages(
-  threadId: string,
+  conversationId: string,
   limit: number = 50
 ): Promise<Array<{ id: string; encrypted: EncryptedData; createdAt: number }>> {
-  const records = await getDB().getAllFromIndex('messages', 'by-thread', threadId);
+  let records: Array<{ id: string; conversationId: string; ciphertext: string; iv: string; createdAt: number }> = [];
+  try {
+    records = await getDB().getAllFromIndex('messages', 'by-conversation', conversationId);
+  } catch (error) {
+    console.warn('Messages index missing, returning empty history', error);
+    return [];
+  }
 
   // Sort by created time and limit
   return records
@@ -279,7 +291,7 @@ export async function clearAllData(): Promise<void> {
   const database = getDB();
   await database.clear('identity');
   await database.clear('contacts');
-  await database.clear('threads');
+  await database.clear('conversations');
   await database.clear('messages');
 }
 

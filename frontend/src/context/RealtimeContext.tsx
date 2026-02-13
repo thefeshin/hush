@@ -10,14 +10,14 @@ import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
-import { replaceMessageId, saveMessage } from '../services/storage';
+import { replaceMessageId, saveConversation, saveMessage } from '../services/storage';
 import { processQueue } from '../services/messageQueue';
-import type { EncryptedData, MessagePayload } from '../types/crypto';
+import type { ConversationMetadata, EncryptedData, MessagePayload } from '../types/crypto';
 
 interface RealtimeContextValue {
   connectionState: ConnectionState;
   isConnected: boolean;
-  sendMessage: (conversationId: string, encrypted: EncryptedData) => Promise<{ id: string }>;
+  sendMessage: (conversationId: string, encrypted: EncryptedData, recipientId?: string) => Promise<{ id: string }>;
   subscribeConversation: (conversationId: string) => void;
   unsubscribeConversation: (conversationId: string) => void;
   disconnect: () => void;
@@ -31,8 +31,8 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
   const { isAuthenticated, user } = useAuthStore();
   const { addMessage, markMessageSent } = useMessageStore();
-  const { updateLastMessage, incrementUnread, getConversation, addConversation } = useConversationStore();
-  const { isUnlocked, getThreadKey, decryptMessage } = useCrypto();
+  const { updateLastMessage, incrementUnread, getConversation, upsertConversation } = useConversationStore();
+  const { isUnlocked, getConversationKey, decryptMessage, encryptIdentity } = useCrypto();
 
   // Connection lifecycle is owned here.
   useEffect(() => {
@@ -76,17 +76,29 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       const existingConversation = getConversation(conversationId);
 
       if (!existingConversation) {
-        const threadKey = await getThreadKey(user.id, senderId);
-        const plaintext = await decryptMessage(threadKey, encrypted);
+        const conversationKey = await getConversationKey(user.id, senderId);
+        const plaintext = await decryptMessage(conversationKey, encrypted);
         const payload: MessagePayload = JSON.parse(plaintext);
         const timestamp = createdAt ? new Date(createdAt).getTime() : payload.timestamp;
+        const participantUsername = payload.sender_name || senderId;
 
-        addConversation({
+        const metadata: ConversationMetadata = {
+          participants: [user.id, senderId].sort() as [string, string],
+          created_by: {
+            user_id: payload.sender_id,
+            display_name: payload.sender_name
+          },
+          created_at: payload.timestamp
+        };
+        const encryptedMetadata = await encryptIdentity(metadata);
+        await saveConversation(conversationId, encryptedMetadata, timestamp);
+
+        upsertConversation({
           conversationId,
           participantId: senderId,
-          participantUsername: payload.sender_name || 'Unknown',
+          participantUsername,
           createdAt: Date.now(),
-          lastMessageAt: payload.timestamp,
+          lastMessageAt: timestamp,
           unreadCount: 1
         });
 
@@ -96,7 +108,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
         addMessage({
           id,
-          threadId: conversationId,
+          conversationId,
           senderId: payload.sender_id,
           senderName: payload.sender_name,
           content: payload.content,
@@ -108,16 +120,24 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const threadKey = await getThreadKey(user.id, existingConversation.participantId);
-      const plaintext = await decryptMessage(threadKey, encrypted);
+      const conversationKey = await getConversationKey(user.id, existingConversation.participantId);
+      const plaintext = await decryptMessage(conversationKey, encrypted);
       const payload: MessagePayload = JSON.parse(plaintext);
 
       const timestamp = createdAt ? new Date(createdAt).getTime() : payload.timestamp;
       await saveMessage(id, conversationId, encrypted, timestamp);
 
+      if (payload.sender_id !== user.id && payload.sender_name) {
+        upsertConversation({
+          ...existingConversation,
+          participantUsername: payload.sender_name,
+          lastMessageAt: timestamp
+        });
+      }
+
       addMessage({
         id,
-        threadId: conversationId,
+        conversationId,
         senderId: payload.sender_id,
         senderName: payload.sender_name,
         content: payload.content,
@@ -135,9 +155,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   }, [
     user,
     getConversation,
-    getThreadKey,
+    getConversationKey,
     decryptMessage,
-    addConversation,
+    encryptIdentity,
+    upsertConversation,
     addMessage,
     updateLastMessage,
     incrementUnread
@@ -150,12 +171,12 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
 
       await processQueue(
-        async (threadId, encrypted) => {
+        async (conversationId, encrypted, recipientId) => {
           try {
-            return await wsService.sendMessage(threadId, encrypted);
+            return await wsService.sendMessage(conversationId, encrypted, recipientId);
           } catch {
             const syncService = getSyncService();
-            return await syncService.sendMessage(threadId, encrypted);
+            return await syncService.sendMessage(conversationId, encrypted, recipientId);
           }
         },
         async (localMessageId, serverMessageId) => {
@@ -188,10 +209,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     });
 
     const unsubMessage = wsService.onMessage(async (msg) => {
-      if (msg.type === 'message' && msg.thread_id && msg.ciphertext && msg.iv && msg.id) {
+      if (msg.type === 'message' && msg.conversation_id && msg.ciphertext && msg.iv && msg.id) {
         await handleIncomingMessage(
           msg.id,
-          msg.thread_id,
+          msg.conversation_id,
           { ciphertext: msg.ciphertext, iv: msg.iv },
           msg.sender_id,
           msg.created_at
@@ -207,8 +228,8 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     };
   }, [handleIncomingMessage]);
 
-  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData) => {
-    return wsService.sendMessage(conversationId, encrypted);
+  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string) => {
+    return wsService.sendMessage(conversationId, encrypted, recipientId);
   }, []);
 
   const subscribeConversation = useCallback((conversationId: string) => {

@@ -3,10 +3,12 @@
  */
 
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useCrypto } from '../crypto/CryptoContext';
+import { getSyncService } from '../services/sync';
 import { useConversationSubscription } from '../hooks/useConversationSubscription';
 import { MessageList } from './MessageList';
 import { MessageComposer } from './MessageComposer';
@@ -17,9 +19,10 @@ interface Props {
 
 export function ConversationView({ conversationId }: Props) {
   const user = useAuthStore(state => state.user);
-  const { getConversation } = useConversationStore();
-  const { loadMessagesForThread, getMessages } = useMessageStore();
-  const { getThreadKey, decryptMessage } = useCrypto();
+  const { getConversation, setActiveConversation } = useConversationStore();
+  const { loadMessagesForConversation, getMessages } = useMessageStore();
+  const { getConversationKey, decryptMessage } = useCrypto();
+  const navigate = useNavigate();
 
   const conversation = getConversation(conversationId);
   const messages = getMessages(conversationId);
@@ -35,12 +38,15 @@ export function ConversationView({ conversationId }: Props) {
   }, [conversationId, user, conversation]);
 
   const loadConversationMessages = async () => {
-    if (!user || !conversation) return;
+    if (!user || !conversation || !conversation.participantId) return;
 
-    const threadKey = await getThreadKey(user.id, conversation.participantId);
+    const syncService = getSyncService();
+    await syncService.syncConversation(conversationId, null);
 
-    await loadMessagesForThread(conversationId, async (encrypted) => {
-      return decryptMessage(threadKey, encrypted);
+    const conversationKey = await getConversationKey(user.id, conversation.participantId);
+
+    await loadMessagesForConversation(conversationId, async (encrypted) => {
+      return decryptMessage(conversationKey, encrypted);
     });
   };
 
@@ -51,12 +57,22 @@ export function ConversationView({ conversationId }: Props) {
   return (
     <div className="conversation-view">
       <div className="conversation-header">
+        <button
+          type="button"
+          className="conversation-back-button"
+          onClick={() => {
+            setActiveConversation(null);
+            navigate('/conversation');
+          }}
+          aria-label="Back to conversations"
+        >
+          &lt;
+        </button>
         <div className="conversation-avatar large">
           {conversation.participantUsername[0].toUpperCase()}
         </div>
         <div className="conversation-title">
           <h2>{conversation.participantUsername}</h2>
-          <span className="conversation-uuid">{conversation.participantId.slice(0, 8)}...</span>
         </div>
       </div>
 

@@ -1,9 +1,13 @@
 from types import SimpleNamespace
+from typing import Optional
 from uuid import UUID, uuid4
+from datetime import datetime, timezone
 
 import pytest
 
 from app.dependencies.auth import extract_ws_token
+from app.dependencies.auth import AuthenticatedUser
+from app.routers import messages as messages_router
 from app.routers import websocket as ws_router
 from app.security_limits import MAX_MESSAGE_CIPHERTEXT_BYTES
 
@@ -52,18 +56,24 @@ class FakeWsManager:
         self.personal = []
         self.subscribed = []
         self.subscribed_set = set()
-        self.forced_subscription_count = None
+        self.broadcasts = []
+        self.user_deliveries = []
+        self.user_auto_subscriptions = []
+        self.forced_subscription_count: Optional[int] = None
         self.allow_messages = True
 
     async def send_personal(self, _websocket, message):
         self.personal.append(message)
 
-    async def subscribe_to_thread(self, _websocket, thread_id):
-        self.subscribed.append(thread_id)
-        self.subscribed_set.add(thread_id)
+    async def subscribe_to_conversation(self, _websocket, conversation_id):
+        self.subscribed.append(conversation_id)
+        self.subscribed_set.add(conversation_id)
 
-    async def is_subscribed_to_thread(self, _websocket, thread_id):
-        return thread_id in self.subscribed_set
+    async def is_subscribed_to_conversation(self, _websocket, conversation_id):
+        return conversation_id in self.subscribed_set
+
+    async def unsubscribe_from_conversation(self, _websocket, _conversation_id):
+        return None
 
     async def get_subscription_count(self, _websocket):
         if self.forced_subscription_count is not None:
@@ -72,6 +82,15 @@ class FakeWsManager:
 
     async def allow_incoming_message(self, _websocket, **_kwargs):
         return self.allow_messages
+
+    async def broadcast_to_conversation(self, conversation_id, message):
+        self.broadcasts.append((conversation_id, message))
+
+    async def subscribe_user_connections_to_conversation(self, user_id, conversation_id):
+        self.user_auto_subscriptions.append((user_id, conversation_id))
+
+    async def send_to_user(self, user_id, message):
+        self.user_deliveries.append((user_id, message))
 
 
 class FakeWebSocket:
@@ -95,13 +114,13 @@ async def test_handle_subscribe_blocks_non_participants(monkeypatch):
     fake_manager = FakeWsManager()
     monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
 
-    conn = FakeConnection(fetchval_side_effect=[True, False])  # thread exists, not participant
+    conn = FakeConnection(fetchval_side_effect=[True, False])
     pool = FakePool(conn)
     websocket = FakeWebSocket(user_id=uuid4())
 
     await ws_router.handle_subscribe(
         websocket,
-        {"thread_id": str(uuid4())},
+        {"conversation_id": str(uuid4())},
         pool,
     )
 
@@ -116,16 +135,16 @@ async def test_handle_subscribe_user_uses_authenticated_user_id(monkeypatch):
 
     authenticated_user_id = uuid4()
     conn = FakeConnection(
-        rows=[{"thread_id": uuid4()}, {"thread_id": uuid4()}],
+        rows=[{"conversation_id": uuid4()}, {"conversation_id": uuid4()}],
     )
     pool = FakePool(conn)
     websocket = FakeWebSocket(user_id=authenticated_user_id)
 
     await ws_router.handle_subscribe_user(websocket, pool)
 
-    assert conn.fetch_args == (authenticated_user_id, authenticated_user_id)
+    assert conn.fetch_args == (authenticated_user_id,)
     assert len(fake_manager.subscribed) == 2
-    assert fake_manager.personal[-1] == {"type": "user_subscribed", "thread_count": 2}
+    assert fake_manager.personal[-1] == {"type": "user_subscribed", "conversation_count": 2}
 
 
 @pytest.mark.asyncio
@@ -140,7 +159,7 @@ async def test_handle_subscribe_rejects_when_subscription_limit_reached(monkeypa
 
     await ws_router.handle_subscribe(
         websocket,
-        {"thread_id": str(uuid4())},
+        {"conversation_id": str(uuid4())},
         pool,
     )
 
@@ -161,14 +180,16 @@ async def test_handle_message_rejects_rate_limited_connection(monkeypatch):
     await ws_router.handle_message(
         websocket,
         {
-            "thread_id": str(uuid4()),
+            "conversation_id": str(uuid4()),
             "ciphertext": "Zm9v",  # "foo"
             "iv": "MTIzNDU2Nzg5MDEy",  # 12 bytes
         },
         pool,
     )
 
-    assert fake_manager.personal[-1] == {"type": "error", "message": "rate_limited"}
+    assert fake_manager.personal[-1]["type"] == "error"
+    assert fake_manager.personal[-1]["code"] == "rate_limited"
+    assert fake_manager.personal[-1]["message"] == "rate_limited"
 
 
 @pytest.mark.asyncio
@@ -183,17 +204,16 @@ async def test_handle_message_rejects_invalid_iv_size(monkeypatch):
     await ws_router.handle_message(
         websocket,
         {
-            "thread_id": str(uuid4()),
+            "conversation_id": str(uuid4()),
             "ciphertext": "Zm9v",  # "foo"
             "iv": "YWJjZGVmZ2hpams=",  # "abcdefghijk" (11 bytes)
         },
         pool,
     )
 
-    assert fake_manager.personal[-1] == {
-        "type": "error",
-        "message": "iv must decode to exactly 12 bytes",
-    }
+    assert fake_manager.personal[-1]["type"] == "error"
+    assert fake_manager.personal[-1]["code"] == "invalid_payload"
+    assert fake_manager.personal[-1]["message"] == "iv must decode to exactly 12 bytes"
 
 
 @pytest.mark.asyncio
@@ -209,14 +229,130 @@ async def test_handle_message_rejects_oversized_ciphertext(monkeypatch):
     await ws_router.handle_message(
         websocket,
         {
-            "thread_id": str(uuid4()),
+            "conversation_id": str(uuid4()),
             "ciphertext": oversized_ciphertext,
             "iv": "MTIzNDU2Nzg5MDEy",
         },
         pool,
     )
 
-    assert fake_manager.personal[-1] == {
-        "type": "error",
-        "message": "ciphertext exceeds maximum size",
-    }
+    assert fake_manager.personal[-1]["type"] == "error"
+    assert fake_manager.personal[-1]["code"] == "invalid_payload"
+    assert fake_manager.personal[-1]["message"] == "ciphertext exceeds maximum size"
+
+
+@pytest.mark.asyncio
+async def test_handle_message_delivers_to_recipient_without_existing_subscription(monkeypatch):
+    fake_manager = FakeWsManager()
+    monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
+
+    conversation_id = uuid4()
+    sender_id = uuid4()
+    recipient_id = uuid4()
+    persisted_message_id = uuid4()
+
+    conn = FakeConnection(
+        fetchval_side_effect=[True],
+        fetchrow_value={
+            "id": persisted_message_id,
+            "created_at": datetime.now(timezone.utc),
+        },
+    )
+    pool = FakePool(conn)
+    websocket = FakeWebSocket(user_id=sender_id)
+
+    await ws_router.handle_message(
+        websocket,
+        {
+            "conversation_id": str(conversation_id),
+            "recipient_id": str(recipient_id),
+            "client_message_id": "client-123",
+            "ciphertext": "Zm9v",
+            "iv": "MTIzNDU2Nzg5MDEy",
+        },
+        pool,
+    )
+
+    assert len(fake_manager.broadcasts) == 1
+    broadcast_conversation_id, broadcast_payload = fake_manager.broadcasts[0]
+    assert broadcast_conversation_id == str(conversation_id)
+    assert broadcast_payload["id"] == str(persisted_message_id)
+    assert broadcast_payload["conversation_id"] == str(conversation_id)
+    assert broadcast_payload["sender_id"] == str(sender_id)
+    assert broadcast_payload["client_message_id"] == "client-123"
+
+    assert len(fake_manager.personal) == 1
+    assert fake_manager.personal[0]["type"] == "message_sent"
+    assert fake_manager.personal[0]["id"] == str(persisted_message_id)
+    assert fake_manager.personal[0]["conversation_id"] == str(conversation_id)
+    assert fake_manager.personal[0]["client_message_id"] == "client-123"
+
+    assert fake_manager.user_auto_subscriptions == [(str(recipient_id), str(conversation_id))]
+    assert len(fake_manager.user_deliveries) == 1
+    delivered_user_id, delivered_payload = fake_manager.user_deliveries[0]
+    assert delivered_user_id == str(recipient_id)
+    assert delivered_payload == broadcast_payload
+
+
+@pytest.mark.asyncio
+async def test_create_message_rest_delivers_realtime_to_recipient(monkeypatch):
+    fake_manager = FakeWsManager()
+    monkeypatch.setattr(messages_router, "ws_manager", fake_manager)
+
+    async def no_op_ensure_direct_conversation(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        messages_router,
+        "ensure_direct_conversation",
+        no_op_ensure_direct_conversation,
+    )
+
+    conversation_id = uuid4()
+    sender_id = uuid4()
+    recipient_id = uuid4()
+    persisted_message_id = uuid4()
+    created_at = datetime.now(timezone.utc)
+
+    conn = FakeConnection(
+        fetchrow_value={
+            "id": persisted_message_id,
+            "conversation_id": conversation_id,
+            "sender_id": sender_id,
+            "ciphertext": b"foo",
+            "iv": b"123456789012",
+            "created_at": created_at,
+        }
+    )
+
+    message = messages_router.MessageCreate(
+        conversation_id=conversation_id,
+        recipient_id=recipient_id,
+        ciphertext="Zm9v",
+        iv="MTIzNDU2Nzg5MDEy",
+    )
+
+    response = await messages_router.create_message(
+        message,
+        conn=conn,
+        user=AuthenticatedUser(user_id=sender_id, username="sender"),
+    )
+
+    assert str(response.id) == str(persisted_message_id)
+    assert str(response.conversation_id) == str(conversation_id)
+    assert str(response.sender_id) == str(sender_id)
+
+    assert len(fake_manager.broadcasts) == 1
+    broadcast_conversation_id, broadcast_payload = fake_manager.broadcasts[0]
+    assert broadcast_conversation_id == str(conversation_id)
+    assert broadcast_payload["id"] == str(persisted_message_id)
+    assert broadcast_payload["conversation_id"] == str(conversation_id)
+    assert broadcast_payload["sender_id"] == str(sender_id)
+    assert broadcast_payload["ciphertext"] == "Zm9v"
+    assert broadcast_payload["iv"] == "MTIzNDU2Nzg5MDEy"
+
+    assert fake_manager.user_auto_subscriptions == [(str(recipient_id), str(conversation_id))]
+    assert len(fake_manager.user_deliveries) == 1
+    delivered_user_id, delivered_payload = fake_manager.user_deliveries[0]
+    assert delivered_user_id == str(recipient_id)
+    assert delivered_payload == broadcast_payload

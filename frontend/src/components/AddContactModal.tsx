@@ -148,7 +148,6 @@ export function AddContactModal({ onClose }: Props) {
               </div>
               <div className="user-details">
                 <span className="user-name">{foundUser.username}</span>
-                <span className="user-id">{foundUser.id.slice(0, 8)}...</span>
               </div>
             </div>
 

@@ -99,18 +99,8 @@ main() {
   fi
 
   echo ""
-  echo "================================================================"
-  echo "         YOUR 12-WORD VAULT PASSPHRASE"
-  echo "================================================================"
-  echo ""
-
-  for ((i=0; i<12; i+=3)); do
-    printf "   %2d. %-12s  %2d. %-12s  %2d. %-12s\n" \
-      $((i+1)) "${words[$i]}" \
-      $((i+2)) "${words[$((i+1))]}" \
-      $((i+3)) "${words[$((i+2))]}"
-  done
-
+  echo "YOUR 12-WORD VAULT PASSPHRASE:"
+  echo "${words[*]}"
   echo ""
   echo "================================================================"
   echo "  WRITE THESE DOWN NOW. THEY WILL NOT BE SHOWN AGAIN."

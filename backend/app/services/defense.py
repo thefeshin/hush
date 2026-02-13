@@ -175,8 +175,8 @@ class DefenseService:
             """
             TRUNCATE TABLE
                 messages,
-                thread_participants,
-                threads,
+                conversation_participants,
+                conversations,
                 refresh_tokens,
                 users,
                 blocked_ips,
