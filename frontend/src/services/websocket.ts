@@ -341,15 +341,6 @@ export class WebSocketService {
           }
         }
       }
-
-      // Find and resolve pending message
-      for (const [tempId, pending] of this.pendingMessages) {
-        if (pending.threadId === msg.thread_id) {
-          this.pendingMessages.delete(tempId);
-          pending.resolve({ id: msg.id });
-          break;
-        }
-      }
     }
   }
 

@@ -5,6 +5,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { wsService, ConnectionState } from '../services/websocket';
+import { getSyncService } from '../services/sync';
 import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useConversationStore } from '../stores/conversationStore';
@@ -149,7 +150,14 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
 
       await processQueue(
-        (threadId, encrypted) => wsService.sendMessage(threadId, encrypted),
+        async (threadId, encrypted) => {
+          try {
+            return await wsService.sendMessage(threadId, encrypted);
+          } catch {
+            const syncService = getSyncService();
+            return await syncService.sendMessage(threadId, encrypted);
+          }
+        },
         async (localMessageId, serverMessageId) => {
           await replaceMessageId(localMessageId, serverMessageId);
           markMessageSent(localMessageId, serverMessageId);

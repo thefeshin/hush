@@ -6,6 +6,7 @@
 const CACHE_NAME = 'hush-v1';
 const STATIC_CACHE = 'hush-static-v1';
 const DYNAMIC_CACHE = 'hush-dynamic-v1';
+const PRECACHE_MANIFEST = self.__WB_MANIFEST || [];
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
@@ -15,6 +16,12 @@ const STATIC_ASSETS = [
   '/icon-192.png',
   '/icon-512.png'
 ];
+
+for (const asset of PRECACHE_MANIFEST) {
+  if (asset && typeof asset.url === 'string' && !STATIC_ASSETS.includes(asset.url)) {
+    STATIC_ASSETS.push(asset.url);
+  }
+}
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {

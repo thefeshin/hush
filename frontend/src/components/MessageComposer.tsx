@@ -76,13 +76,13 @@ export function MessageComposer({ conversationId, participantId }: Props) {
         markMessageSent(tempId, result.id);
       } else {
         // Queue for later when offline
-        const queuedId = await queueMessage(conversationId, tempId, encrypted);
+        await queueMessage(conversationId, tempId, encrypted);
 
-        // Save to local storage with queued ID
-        await saveMessage(queuedId, conversationId, encrypted, payload.timestamp);
+        // Save to local storage with the same temporary ID for deterministic replay reconciliation
+        await saveMessage(tempId, conversationId, encrypted, payload.timestamp);
 
-        // Mark as sent (but queued)
-        markMessageSent(tempId, queuedId);
+        // Mark as queued-sent in UI while waiting for server reconciliation
+        markMessageSent(tempId, tempId);
       }
 
       updateLastMessage(conversationId, Date.now());

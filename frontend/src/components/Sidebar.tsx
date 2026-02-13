@@ -9,6 +9,7 @@ import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { clearAllData } from '../services/storage';
+import { clearQueue } from '../services/messageQueue';
 import { AddContactModal } from './AddContactModal';
 import { ConnectionStatus } from './ConnectionStatus';
 
@@ -31,6 +32,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
 
   const handleLogout = async () => {
     disconnect();
+    await clearQueue();
     await clearAllData();
     await lockVault();  // lockVault is now async
     await logout();
