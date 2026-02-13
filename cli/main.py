@@ -297,19 +297,10 @@ def print_secrets(secrets, config):
     print("\n" + "=" * 60)
     print("         HUSH VAULT INITIALIZED")
     print("=" * 60)
-    print("\n╔═══════════════════════════════════════════════════════════╗")
-    print("║  LOGIN WORDS (SAVE THESE - NOT RECOVERABLE)               ║")
-    print("╠═══════════════════════════════════════════════════════════╣")
-    print(f"║                                                           ║")
 
-    # Print words in a readable format (3 words per line)
+    print("\nLOGIN WORDS (save these - not recoverable):")
     words = secrets['words']
-    for i in range(0, 12, 3):
-        line = f"  {i+1:2}. {words[i]:<12}  {i+2:2}. {words[i+1]:<12}  {i+3:2}. {words[i+2]:<12}"
-        print(f"║ {line:<57} ║")
-
-    print(f"║                                                           ║")
-    print("╚═══════════════════════════════════════════════════════════╝")
+    print(" ".join(words))
 
     print(f"\nKDF SALT: {secrets['kdf_salt']}")
 
