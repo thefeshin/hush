@@ -38,6 +38,8 @@ class WebSocketManager:
     def __init__(self):
         # All active connections
         self._connections: Dict[WebSocket, Connection] = {}
+        # User ID -> active sockets
+        self._user_connections: Dict[str, Set[WebSocket]] = {}
         # Conversation ID -> Set of connections subscribed to it
         self._conversation_subscriptions: Dict[str, Set[WebSocket]] = {}
         # Lock for concurrent operations
@@ -50,6 +52,11 @@ class WebSocketManager:
         async with self._lock:
             connection = Connection(websocket=websocket)
             self._connections[websocket] = connection
+            user_id = str(getattr(websocket.state, "user_id", ""))
+            if user_id:
+                if user_id not in self._user_connections:
+                    self._user_connections[user_id] = set()
+                self._user_connections[user_id].add(websocket)
 
         return connection
 
@@ -59,6 +66,12 @@ class WebSocketManager:
             connection = self._connections.pop(websocket, None)
 
             if connection:
+                user_id = str(getattr(websocket.state, "user_id", ""))
+                if user_id in self._user_connections:
+                    self._user_connections[user_id].discard(websocket)
+                    if not self._user_connections[user_id]:
+                        del self._user_connections[user_id]
+
                 # Remove from all conversation subscriptions
                 for conversation_id in connection.subscribed_conversations:
                     if conversation_id in self._conversation_subscriptions:
@@ -124,6 +137,32 @@ class WebSocketManager:
                 await websocket.send_json(message)
         except Exception:
             await self.disconnect(websocket)
+
+    async def send_to_user(self, user_id: str, message: dict):
+        """Send a message to all active sockets for a user."""
+        async with self._lock:
+            sockets = self._user_connections.get(user_id, set()).copy()
+
+        dead_connections = []
+        for websocket in sockets:
+            try:
+                if websocket.client_state == WebSocketState.CONNECTED:
+                    await websocket.send_json(message)
+                else:
+                    dead_connections.append(websocket)
+            except Exception:
+                dead_connections.append(websocket)
+
+        for ws in dead_connections:
+            await self.disconnect(ws)
+
+    async def subscribe_user_connections_to_conversation(self, user_id: str, conversation_id: str):
+        """Subscribe all active sockets for a user to a conversation."""
+        async with self._lock:
+            sockets = self._user_connections.get(user_id, set()).copy()
+
+        for websocket in sockets:
+            await self.subscribe_to_conversation(websocket, conversation_id)
 
     async def update_activity(self, websocket: WebSocket):
         """Update last activity timestamp for a connection"""

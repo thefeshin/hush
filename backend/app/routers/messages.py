@@ -18,6 +18,7 @@ from app.services.authorization import (
     require_conversation_participant,
     require_message_participant,
 )
+from app.services.websocket import ws_manager
 from app.utils.payload_validation import decode_base64_field
 
 router = APIRouter()
@@ -92,6 +93,26 @@ async def create_message(
         ciphertext_bytes,
         iv_bytes,
     )
+
+    broadcast_msg = {
+        "type": "message",
+        "id": str(row["id"]),
+        "conversation_id": str(row["conversation_id"]),
+        "sender_id": str(row["sender_id"]),
+        "ciphertext": base64.b64encode(row["ciphertext"]).decode("ascii"),
+        "iv": base64.b64encode(row["iv"]).decode("ascii"),
+        "created_at": row["created_at"].isoformat(),
+    }
+
+    await ws_manager.broadcast_to_conversation(str(row["conversation_id"]), broadcast_msg)
+
+    if message.recipient_id:
+        recipient_user_id = str(message.recipient_id)
+        await ws_manager.subscribe_user_connections_to_conversation(
+            recipient_user_id,
+            str(row["conversation_id"]),
+        )
+        await ws_manager.send_to_user(recipient_user_id, broadcast_msg)
 
     return MessageResponse(
         id=row["id"],

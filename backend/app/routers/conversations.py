@@ -46,15 +46,38 @@ async def discover_conversations(
 ):
     rows = await conn.fetch(
         """
-        SELECT conversation_id
-        FROM conversation_participants
-        WHERE user_id = $1
-        ORDER BY created_at DESC
+        SELECT
+            cp.conversation_id,
+            MIN(other.user_id) AS other_user_id,
+            MIN(other_user.username) AS other_username,
+            MAX(cp.created_at) AS last_seen_at
+        FROM conversation_participants cp
+        JOIN conversation_participants other
+          ON other.conversation_id = cp.conversation_id
+         AND other.user_id <> cp.user_id
+        JOIN users other_user
+          ON other_user.id = other.user_id
+        WHERE cp.user_id = $1
+        GROUP BY cp.conversation_id
+        ORDER BY last_seen_at DESC
         """,
         user.user_id,
     )
 
-    return {"conversation_ids": [str(row["conversation_id"]) for row in rows]}
+    conversations = [
+        {
+            "conversation_id": str(row["conversation_id"]),
+            "other_user_id": str(row["other_user_id"]),
+            "other_username": row["other_username"],
+        }
+        for row in rows
+    ]
+
+    # Keep legacy shape for backward compatibility.
+    return {
+        "conversations": conversations,
+        "conversation_ids": [item["conversation_id"] for item in conversations],
+    }
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)

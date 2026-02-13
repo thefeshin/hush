@@ -201,15 +201,26 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
     """
     conversation_id = data.get("conversation_id")
     recipient_id = data.get("recipient_id")
+    client_message_id = data.get("client_message_id")
     ciphertext = data.get("ciphertext")
     iv = data.get("iv")
 
+    def build_error(code: str, message: str) -> dict:
+        payload = {
+            "type": "error",
+            "code": code,
+            "message": message,
+        }
+        if client_message_id:
+            payload["client_message_id"] = str(client_message_id)
+        return payload
+
     # Validate required fields
     if not all([conversation_id, ciphertext, iv]):
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "message": "Missing required fields: conversation_id, ciphertext, iv"
-        })
+        await ws_manager.send_personal(websocket, build_error(
+            "invalid_request",
+            "Missing required fields: conversation_id, ciphertext, iv",
+        ))
         return
 
     conversation_id = str(conversation_id)
@@ -222,20 +233,14 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         window_seconds=WS_RATE_WINDOW_SECONDS,
     )
     if not allowed:
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "message": "rate_limited"
-        })
+        await ws_manager.send_personal(websocket, build_error("rate_limited", "rate_limited"))
         return
 
     # Validate UUID format
     try:
         conversation_uuid = UUID(conversation_id)
     except ValueError:
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "message": "Invalid conversation_id format"
-        })
+        await ws_manager.send_personal(websocket, build_error("invalid_conversation_id", "Invalid conversation_id format"))
         return
 
     recipient_uuid = None
@@ -243,10 +248,7 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         try:
             recipient_uuid = UUID(recipient_id)
         except ValueError:
-            await ws_manager.send_personal(websocket, {
-                "type": "error",
-                "message": "Invalid recipient_id format"
-            })
+            await ws_manager.send_personal(websocket, build_error("invalid_recipient", "Invalid recipient_id format"))
             return
 
     try:
@@ -262,10 +264,9 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
             exact_bytes=IV_BYTES,
         )
     except HTTPException as exc:
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "message": str(exc.detail)
-        })
+        detail = str(exc.detail)
+        code = "conversation_not_found" if "Conversation not found" in detail else "invalid_payload"
+        await ws_manager.send_personal(websocket, build_error(code, detail))
         return
 
     # Persist message to database
@@ -298,17 +299,13 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
             """, conversation_uuid, websocket.state.user_id, ciphertext_bytes, iv_bytes)
 
     except HTTPException as exc:
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "message": str(exc.detail)
-        })
+        detail = str(exc.detail)
+        code = "conversation_not_found" if "Conversation not found" in detail else "forbidden"
+        await ws_manager.send_personal(websocket, build_error(code, detail))
         return
     except Exception as exc:
         logger.error(f"Failed to persist message: {type(exc).__name__}")
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "message": "Failed to save message"
-        })
+        await ws_manager.send_personal(websocket, build_error("message_persist_failed", "Failed to save message"))
         return
 
     # Prepare broadcast message (include sender_id for auto-discovery)
@@ -317,6 +314,7 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         "id": str(row["id"]),
         "conversation_id": conversation_id,
         "sender_id": str(websocket.state.user_id),  # Sender's user ID (plaintext)
+        "client_message_id": str(client_message_id) if client_message_id else None,
         "ciphertext": ciphertext,
         "iv": iv,
         "created_at": row["created_at"].isoformat()
@@ -324,6 +322,24 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
 
     # Broadcast to all subscribers of this conversation
     await ws_manager.broadcast_to_conversation(conversation_id, broadcast_msg)
+
+    # Explicit sender ACK so client can resolve quickly without depending on
+    # subscription timing for conversation echoes.
+    if client_message_id:
+        await ws_manager.send_personal(websocket, {
+            "type": "message_sent",
+            "id": str(row["id"]),
+            "conversation_id": conversation_id,
+            "client_message_id": str(client_message_id),
+            "created_at": row["created_at"].isoformat(),
+        })
+
+    # Ensure the recipient gets first-message delivery even before explicit
+    # conversation subscription from the client.
+    if recipient_uuid:
+        recipient_user_id = str(recipient_uuid)
+        await ws_manager.subscribe_user_connections_to_conversation(recipient_user_id, conversation_id)
+        await ws_manager.send_to_user(recipient_user_id, broadcast_msg)
 
 
 async def handle_subscribe_user(websocket: WebSocket, pool):
