@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Optional
 from uuid import UUID, uuid4
 
 import pytest
@@ -52,18 +53,21 @@ class FakeWsManager:
         self.personal = []
         self.subscribed = []
         self.subscribed_set = set()
-        self.forced_subscription_count = None
+        self.forced_subscription_count: Optional[int] = None
         self.allow_messages = True
 
     async def send_personal(self, _websocket, message):
         self.personal.append(message)
 
-    async def subscribe_to_thread(self, _websocket, thread_id):
-        self.subscribed.append(thread_id)
-        self.subscribed_set.add(thread_id)
+    async def subscribe_to_conversation(self, _websocket, conversation_id):
+        self.subscribed.append(conversation_id)
+        self.subscribed_set.add(conversation_id)
 
-    async def is_subscribed_to_thread(self, _websocket, thread_id):
-        return thread_id in self.subscribed_set
+    async def is_subscribed_to_conversation(self, _websocket, conversation_id):
+        return conversation_id in self.subscribed_set
+
+    async def unsubscribe_from_conversation(self, _websocket, _conversation_id):
+        return None
 
     async def get_subscription_count(self, _websocket):
         if self.forced_subscription_count is not None:
@@ -95,13 +99,13 @@ async def test_handle_subscribe_blocks_non_participants(monkeypatch):
     fake_manager = FakeWsManager()
     monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
 
-    conn = FakeConnection(fetchval_side_effect=[True, False])  # thread exists, not participant
+    conn = FakeConnection(fetchval_side_effect=[True, False])
     pool = FakePool(conn)
     websocket = FakeWebSocket(user_id=uuid4())
 
     await ws_router.handle_subscribe(
         websocket,
-        {"thread_id": str(uuid4())},
+        {"conversation_id": str(uuid4())},
         pool,
     )
 
@@ -116,16 +120,16 @@ async def test_handle_subscribe_user_uses_authenticated_user_id(monkeypatch):
 
     authenticated_user_id = uuid4()
     conn = FakeConnection(
-        rows=[{"thread_id": uuid4()}, {"thread_id": uuid4()}],
+        rows=[{"conversation_id": uuid4()}, {"conversation_id": uuid4()}],
     )
     pool = FakePool(conn)
     websocket = FakeWebSocket(user_id=authenticated_user_id)
 
     await ws_router.handle_subscribe_user(websocket, pool)
 
-    assert conn.fetch_args == (authenticated_user_id, authenticated_user_id)
+    assert conn.fetch_args == (authenticated_user_id,)
     assert len(fake_manager.subscribed) == 2
-    assert fake_manager.personal[-1] == {"type": "user_subscribed", "thread_count": 2}
+    assert fake_manager.personal[-1] == {"type": "user_subscribed", "conversation_count": 2}
 
 
 @pytest.mark.asyncio
@@ -140,7 +144,7 @@ async def test_handle_subscribe_rejects_when_subscription_limit_reached(monkeypa
 
     await ws_router.handle_subscribe(
         websocket,
-        {"thread_id": str(uuid4())},
+        {"conversation_id": str(uuid4())},
         pool,
     )
 
@@ -161,7 +165,7 @@ async def test_handle_message_rejects_rate_limited_connection(monkeypatch):
     await ws_router.handle_message(
         websocket,
         {
-            "thread_id": str(uuid4()),
+            "conversation_id": str(uuid4()),
             "ciphertext": "Zm9v",  # "foo"
             "iv": "MTIzNDU2Nzg5MDEy",  # 12 bytes
         },
@@ -183,7 +187,7 @@ async def test_handle_message_rejects_invalid_iv_size(monkeypatch):
     await ws_router.handle_message(
         websocket,
         {
-            "thread_id": str(uuid4()),
+            "conversation_id": str(uuid4()),
             "ciphertext": "Zm9v",  # "foo"
             "iv": "YWJjZGVmZ2hpams=",  # "abcdefghijk" (11 bytes)
         },
@@ -209,7 +213,7 @@ async def test_handle_message_rejects_oversized_ciphertext(monkeypatch):
     await ws_router.handle_message(
         websocket,
         {
-            "thread_id": str(uuid4()),
+            "conversation_id": str(uuid4()),
             "ciphertext": oversized_ciphertext,
             "iv": "MTIzNDU2Nzg5MDEy",
         },

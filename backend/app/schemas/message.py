@@ -12,7 +12,8 @@ from app.security_limits import MAX_IV_B64_CHARS, MAX_MESSAGE_CIPHERTEXT_B64_CHA
 
 class MessageCreate(BaseModel):
     """Create a new message (encrypted content)"""
-    thread_id: UUID
+    conversation_id: UUID
+    recipient_id: Optional[UUID] = None
     ciphertext: str = Field(..., min_length=4, max_length=MAX_MESSAGE_CIPHERTEXT_B64_CHARS)
     iv: str = Field(..., min_length=16, max_length=MAX_IV_B64_CHARS)
 
@@ -20,14 +21,15 @@ class MessageCreate(BaseModel):
 class MessageResponse(BaseModel):
     """Message response (still encrypted)"""
     id: UUID
-    thread_id: UUID
+    conversation_id: UUID
+    sender_id: UUID
     ciphertext: str
     iv: str
     created_at: datetime
 
 
 class MessageQuery(BaseModel):
-    """Query messages for a thread"""
-    thread_id: UUID
+    """Query messages for a conversation"""
+    conversation_id: UUID
     after: Optional[datetime] = None    # For pagination
     limit: int = Field(default=50, le=200)

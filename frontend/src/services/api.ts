@@ -179,10 +179,10 @@ export async function getSalt(): Promise<string> {
 }
 
 /**
- * Discover all threads for the authenticated user
+ * Discover all conversations for the authenticated user
  */
-export async function discoverThreads(): Promise<string[]> {
-  const response = await fetch(`${API_BASE}/threads/discover`, {
+export async function discoverConversations(): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/conversations/discover`, {
     credentials: 'include'
   });
 
@@ -190,11 +190,11 @@ export async function discoverThreads(): Promise<string[]> {
     if (response.status === 401) {
       throw new AuthenticationError('not_authenticated', 'Not authenticated');
     }
-    throw new Error('Failed to discover threads');
+    throw new Error('Failed to discover conversations');
   }
 
   const data = await response.json();
-  return data.thread_ids;
+  return data.conversation_ids;
 }
 
 /**

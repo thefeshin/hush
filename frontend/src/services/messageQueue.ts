@@ -7,7 +7,8 @@ import type { EncryptedData } from '../types/crypto';
 
 interface QueuedMessage {
   id: string;
-  threadId: string;
+  conversationId: string;
+  recipientId?: string;
   localMessageId: string;
   encrypted: EncryptedData;
   queuedAt: number;
@@ -18,7 +19,7 @@ interface QueueDBSchema extends DBSchema {
   queue: {
     key: string;
     value: QueuedMessage;
-    indexes: { 'by-thread': string; 'by-time': number };
+    indexes: { 'by-conversation': string; 'by-time': number };
   };
 }
 
@@ -35,7 +36,7 @@ async function getDB(): Promise<IDBPDatabase<QueueDBSchema>> {
           database.deleteObjectStore('queue');
         }
         const store = database.createObjectStore('queue', { keyPath: 'id' });
-        store.createIndex('by-thread', 'threadId');
+        store.createIndex('by-conversation', 'conversationId');
         store.createIndex('by-time', 'queuedAt');
       }
     });
@@ -47,16 +48,18 @@ async function getDB(): Promise<IDBPDatabase<QueueDBSchema>> {
  * Add a message to the send queue
  */
 export async function queueMessage(
-  threadId: string,
+  conversationId: string,
   localMessageId: string,
-  encrypted: EncryptedData
+  encrypted: EncryptedData,
+  recipientId?: string
 ): Promise<string> {
   const id = `queued-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   const database = await getDB();
   await database.put('queue', {
     id,
-    threadId,
+    conversationId,
+    recipientId,
     localMessageId,
     encrypted,
     queuedAt: Date.now(),
@@ -75,11 +78,11 @@ export async function getQueuedMessages(): Promise<QueuedMessage[]> {
 }
 
 /**
- * Get queued messages for a specific thread
+ * Get queued messages for a specific conversation
  */
-export async function getQueuedMessagesForThread(threadId: string): Promise<QueuedMessage[]> {
+export async function getQueuedMessagesForConversation(conversationId: string): Promise<QueuedMessage[]> {
   const database = await getDB();
-  return database.getAllFromIndex('queue', 'by-thread', threadId);
+  return database.getAllFromIndex('queue', 'by-conversation', conversationId);
 }
 
 /**
@@ -114,7 +117,7 @@ export async function incrementAttempts(id: string): Promise<void> {
  * Process the queue (send pending messages)
  */
 export async function processQueue(
-  sendFn: (threadId: string, encrypted: EncryptedData) => Promise<{ id: string }>,
+  sendFn: (conversationId: string, encrypted: EncryptedData, recipientId?: string) => Promise<{ id: string }>,
   onSent?: (localMessageId: string, serverMessageId: string) => Promise<void>
 ): Promise<{ sent: number; failed: number }> {
   const messages = await getQueuedMessages();
@@ -130,7 +133,7 @@ export async function processQueue(
     }
 
     try {
-      const result = await sendFn(msg.threadId, msg.encrypted);
+      const result = await sendFn(msg.conversationId, msg.encrypted, msg.recipientId);
       if (onSent) {
         await onSent(msg.localMessageId, result.id);
       }

@@ -11,7 +11,7 @@ const CONTACTS_INFO = 'hush-contacts';
 
 /**
  * Derive a key specifically for encrypting local identity
- * This is separate from thread keys for compartmentalization
+ * This is separate from conversation keys for compartmentalization
  */
 export async function deriveIdentityKey(vaultKey: VaultKey): Promise<CryptoKey> {
   // Use static salt for identity (same across sessions)

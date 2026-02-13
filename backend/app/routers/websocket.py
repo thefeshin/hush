@@ -18,7 +18,10 @@ from app.security_limits import (
     MAX_WS_SUBSCRIPTIONS_PER_CONNECTION,
     WS_RATE_WINDOW_SECONDS,
 )
-from app.services.authorization import require_thread_participant
+from app.services.authorization import (
+    is_conversation_participant,
+    require_conversation_participant,
+)
 from app.utils.payload_validation import decode_base64_field
 
 router = APIRouter()
@@ -35,20 +38,20 @@ async def websocket_endpoint(websocket: WebSocket):
     2. Server validates JWT
     3. Client sends subscribe/unsubscribe messages
     4. Client sends messages (encrypted blobs)
-    5. Server broadcasts to thread subscribers
+    5. Server broadcasts to conversation subscribers
 
     Message types (client -> server):
-    - {"type": "subscribe", "thread_id": "..."}
-    - {"type": "unsubscribe", "thread_id": "..."}
+    - {"type": "subscribe", "conversation_id": "..."}
+    - {"type": "unsubscribe", "conversation_id": "..."}
     - {"type": "subscribe_user"}
-    - {"type": "message", "thread_id": "...", "ciphertext": "...", "iv": "..."}
+    - {"type": "message", "conversation_id": "...", "recipient_id": "...", "ciphertext": "...", "iv": "..."}
     - {"type": "ping"}
 
     Message types (server -> client):
-    - {"type": "subscribed", "thread_id": "..."}
-    - {"type": "unsubscribed", "thread_id": "..."}
-    - {"type": "user_subscribed", "thread_count": N}
-    - {"type": "message", "id": "...", "thread_id": "...", "ciphertext": "...", "iv": "...", "created_at": "..."}
+    - {"type": "subscribed", "conversation_id": "..."}
+    - {"type": "unsubscribed", "conversation_id": "..."}
+    - {"type": "user_subscribed", "conversation_count": N}
+    - {"type": "message", "id": "...", "conversation_id": "...", "ciphertext": "...", "iv": "...", "created_at": "..."}
     - {"type": "error", "message": "..."}
     - {"type": "pong"}
     - {"type": "heartbeat"}
@@ -119,27 +122,27 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 async def handle_subscribe(websocket: WebSocket, data: dict, pool):
-    """Handle thread subscription request"""
-    thread_id = data.get("thread_id")
+    """Handle conversation subscription request"""
+    conversation_id = data.get("conversation_id")
 
-    if not thread_id:
+    if not conversation_id:
         await ws_manager.send_personal(websocket, {
             "type": "error",
-            "message": "Missing thread_id"
+            "message": "Missing conversation_id"
         })
         return
 
     # Validate UUID format
     try:
-        thread_uuid = UUID(thread_id)
+        conversation_uuid = UUID(conversation_id)
     except ValueError:
         await ws_manager.send_personal(websocket, {
             "type": "error",
-            "message": "Invalid thread_id format"
+            "message": "Invalid conversation_id format"
         })
         return
 
-    already_subscribed = await ws_manager.is_subscribed_to_thread(websocket, thread_id)
+    already_subscribed = await ws_manager.is_subscribed_to_conversation(websocket, conversation_id)
     if not already_subscribed:
         current = await ws_manager.get_subscription_count(websocket)
         if current >= MAX_WS_SUBSCRIPTIONS_PER_CONNECTION:
@@ -151,7 +154,7 @@ async def handle_subscribe(websocket: WebSocket, data: dict, pool):
 
     try:
         async with pool.acquire() as conn:
-            await require_thread_participant(conn, thread_uuid, websocket.state.user_id)
+            await require_conversation_participant(conn, conversation_uuid, websocket.state.user_id)
     except HTTPException as exc:
         await ws_manager.send_personal(websocket, {
             "type": "error",
@@ -166,26 +169,26 @@ async def handle_subscribe(websocket: WebSocket, data: dict, pool):
         })
         return
 
-    await ws_manager.subscribe_to_thread(websocket, thread_id)
+    await ws_manager.subscribe_to_conversation(websocket, conversation_id)
 
     await ws_manager.send_personal(websocket, {
         "type": "subscribed",
-        "thread_id": thread_id
+        "conversation_id": conversation_id
     })
 
 
 async def handle_unsubscribe(websocket: WebSocket, data: dict):
-    """Handle thread unsubscription request"""
-    thread_id = data.get("thread_id")
+    """Handle conversation unsubscription request"""
+    conversation_id = data.get("conversation_id")
 
-    if not thread_id:
+    if not conversation_id:
         return
 
-    await ws_manager.unsubscribe_from_thread(websocket, thread_id)
+    await ws_manager.unsubscribe_from_conversation(websocket, conversation_id)
 
     await ws_manager.send_personal(websocket, {
         "type": "unsubscribed",
-        "thread_id": thread_id
+        "conversation_id": conversation_id
     })
 
 
@@ -194,19 +197,24 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
     Handle incoming message (encrypted blob)
     1. Validate required fields
     2. Persist to database
-    3. Broadcast to thread subscribers
+    3. Broadcast to conversation subscribers
     """
-    thread_id = data.get("thread_id")
+    conversation_id = data.get("conversation_id")
+    recipient_id = data.get("recipient_id")
     ciphertext = data.get("ciphertext")
     iv = data.get("iv")
 
     # Validate required fields
-    if not all([thread_id, ciphertext, iv]):
+    if not all([conversation_id, ciphertext, iv]):
         await ws_manager.send_personal(websocket, {
             "type": "error",
-            "message": "Missing required fields: thread_id, ciphertext, iv"
+            "message": "Missing required fields: conversation_id, ciphertext, iv"
         })
         return
+
+    conversation_id = str(conversation_id)
+    ciphertext = str(ciphertext)
+    iv = str(iv)
 
     allowed = await ws_manager.allow_incoming_message(
         websocket,
@@ -222,13 +230,24 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
 
     # Validate UUID format
     try:
-        thread_uuid = UUID(thread_id)
+        conversation_uuid = UUID(conversation_id)
     except ValueError:
         await ws_manager.send_personal(websocket, {
             "type": "error",
-            "message": "Invalid thread_id format"
+            "message": "Invalid conversation_id format"
         })
         return
+
+    recipient_uuid = None
+    if recipient_id:
+        try:
+            recipient_uuid = UUID(recipient_id)
+        except ValueError:
+            await ws_manager.send_personal(websocket, {
+                "type": "error",
+                "message": "Invalid recipient_id format"
+            })
+            return
 
     try:
         ciphertext_bytes = decode_base64_field(
@@ -252,13 +271,31 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
     # Persist message to database
     try:
         async with pool.acquire() as conn:
-            await require_thread_participant(conn, thread_uuid, websocket.state.user_id)
+            if not await is_conversation_participant(conn, conversation_uuid, websocket.state.user_id):
+                if not recipient_uuid:
+                    await require_conversation_participant(conn, conversation_uuid, websocket.state.user_id)
+                else:
+                    async with conn.transaction():
+                        await conn.execute(
+                            "INSERT INTO conversations (id) VALUES ($1) ON CONFLICT DO NOTHING",
+                            conversation_uuid,
+                        )
+                        await conn.execute(
+                            """
+                            INSERT INTO conversation_participants (conversation_id, user_id)
+                            VALUES ($1, $2), ($1, $3)
+                            ON CONFLICT DO NOTHING
+                            """,
+                            conversation_uuid,
+                            websocket.state.user_id,
+                            recipient_uuid,
+                        )
 
             row = await conn.fetchrow("""
-                INSERT INTO messages (thread_id, ciphertext, iv)
-                VALUES ($1, $2, $3)
+                INSERT INTO messages (conversation_id, sender_id, ciphertext, iv)
+                VALUES ($1, $2, $3, $4)
                 RETURNING id, created_at
-            """, thread_uuid, ciphertext_bytes, iv_bytes)
+            """, conversation_uuid, websocket.state.user_id, ciphertext_bytes, iv_bytes)
 
     except HTTPException as exc:
         await ws_manager.send_personal(websocket, {
@@ -278,34 +315,34 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
     broadcast_msg = {
         "type": "message",
         "id": str(row["id"]),
-        "thread_id": thread_id,
+        "conversation_id": conversation_id,
         "sender_id": str(websocket.state.user_id),  # Sender's user ID (plaintext)
         "ciphertext": ciphertext,
         "iv": iv,
         "created_at": row["created_at"].isoformat()
     }
 
-    # Broadcast to all subscribers of this thread
-    await ws_manager.broadcast_to_thread(thread_id, broadcast_msg)
+    # Broadcast to all subscribers of this conversation
+    await ws_manager.broadcast_to_conversation(conversation_id, broadcast_msg)
 
 
 async def handle_subscribe_user(websocket: WebSocket, pool):
     """
-    Subscribe the connection to ALL threads involving this user.
+    Subscribe the connection to ALL conversations involving this user.
 
     This enables users to automatically receive messages from unknown contacts.
-    The server queries thread_participants table (plaintext metadata) to find
-    all threads where the user is a participant.
+    The server queries conversation_participants metadata to find all
+    conversations where the user is a participant.
     """
     user_id = websocket.state.user_id
 
     try:
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
-                SELECT thread_id
-                FROM thread_participants
-                WHERE participant_1 = $1 OR participant_2 = $2
-            """, user_id, user_id)
+                SELECT conversation_id
+                FROM conversation_participants
+                WHERE user_id = $1
+            """, user_id)
 
         available_slots = MAX_WS_SUBSCRIPTIONS_PER_CONNECTION - await ws_manager.get_subscription_count(websocket)
         if available_slots <= 0:
@@ -316,19 +353,19 @@ async def handle_subscribe_user(websocket: WebSocket, pool):
             return
 
         subscribed_count = 0
-        # Subscribe to discovered threads up to per-connection cap.
+        # Subscribe to discovered conversations up to per-connection cap.
         for row in rows:
             if subscribed_count >= available_slots:
                 break
-            thread_id = str(row["thread_id"])
-            if await ws_manager.is_subscribed_to_thread(websocket, thread_id):
+            conversation_id = str(row["conversation_id"])
+            if await ws_manager.is_subscribed_to_conversation(websocket, conversation_id):
                 continue
-            await ws_manager.subscribe_to_thread(websocket, thread_id)
+            await ws_manager.subscribe_to_conversation(websocket, conversation_id)
             subscribed_count += 1
 
         await ws_manager.send_personal(websocket, {
             "type": "user_subscribed",
-            "thread_count": subscribed_count
+            "conversation_count": subscribed_count
         })
 
         if subscribed_count < len(rows):
@@ -337,11 +374,11 @@ async def handle_subscribe_user(websocket: WebSocket, pool):
                 "message": "subscription_limit_reached"
             })
 
-        logger.info(f"User {str(user_id)} subscribed to {subscribed_count} threads")
+        logger.info(f"User {str(user_id)} subscribed to {subscribed_count} conversations")
 
     except Exception as exc:
         logger.error(f"Failed to subscribe user: {type(exc).__name__}")
         await ws_manager.send_personal(websocket, {
             "type": "error",
-            "message": "Failed to subscribe to threads"
+            "message": "Failed to subscribe to conversations"
         })

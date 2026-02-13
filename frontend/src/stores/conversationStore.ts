@@ -3,13 +3,13 @@
  */
 
 import { create } from 'zustand';
-import { saveThread, loadThreads, loadThread } from '../services/storage';
-import { discoverThreads as apiDiscoverThreads } from '../services/api';
+import { saveConversation, loadConversations, loadConversation } from '../services/storage';
+import { discoverConversations as apiDiscoverConversations } from '../services/api';
 import { getSyncService } from '../services/sync';
-import type { EncryptedData, ThreadMetadata } from '../types/crypto';
+import type { EncryptedData, ConversationMetadata } from '../types/crypto';
 
 export interface Conversation {
-  conversationId: string;      // was threadId
+  conversationId: string;
   participantId: string;       // The other participant's user ID
   participantUsername: string; // The other participant's username
   createdAt: number;
@@ -72,19 +72,18 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         expectedConversationIds.set(conversationId, contact);
       }
 
-      // Load stored conversations (still uses 'threads' object store in IndexedDB)
-      const stored = await loadThreads();
+      const stored = await loadConversations();
       const conversations: Conversation[] = [];
 
-      for (const { threadId, encrypted, lastMessageAt } of stored) {
+      for (const { conversationId, encrypted, lastMessageAt } of stored) {
         // Check if this conversation belongs to a known contact
-        const contact = expectedConversationIds.get(threadId);
+        const contact = expectedConversationIds.get(conversationId);
 
         if (contact) {
           try {
             const metadata = await decryptFn(encrypted);
             conversations.push({
-              conversationId: threadId,
+              conversationId,
               participantId: contact.id,
               participantUsername: contact.username,
               createdAt: metadata.created_at,
@@ -118,7 +117,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
 
     // Create conversation metadata
-    const metadata: ThreadMetadata = {
+    const metadata: ConversationMetadata = {
       participants: [myUserId, otherUserId].sort() as [string, string],
       created_by: {
         user_id: myUserId,
@@ -127,9 +126,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       created_at: Date.now()
     };
 
-    // Encrypt and save locally (still uses 'threads' object store)
+    // Encrypt and save locally
     const encrypted = await encryptFn(metadata);
-    await saveThread(conversationId, encrypted, Date.now());
+    await saveConversation(conversationId, encrypted, Date.now());
 
     const conversation: Conversation = {
       conversationId,
@@ -203,22 +202,24 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const existingIds = new Set(existingConversations.map(c => c.conversationId));
 
     try {
-      // Fetch conversation IDs from server (API still uses 'threads' endpoint)
-      const conversationIds = await apiDiscoverThreads();
+      const conversationIds = await apiDiscoverConversations();
 
       // Filter out conversations we already have
       const newConversationIds = conversationIds.filter(id => !existingIds.has(id));
 
-      // Backfill missing thread metadata from server.
+      // Backfill missing conversation records from server.
       if (newConversationIds.length > 0) {
         const syncService = getSyncService();
-        const serverThreads = await syncService.queryThreads(newConversationIds);
-        for (const thread of serverThreads) {
-          await saveThread(
-            thread.id,
-            { ciphertext: thread.ciphertext, iv: thread.iv },
-            new Date(thread.created_at).getTime()
-          );
+        const serverConversations = await syncService.queryConversations(newConversationIds);
+        for (const conversation of serverConversations) {
+          const existing = await loadConversation(conversation.id);
+          if (!existing) {
+            await saveConversation(
+              conversation.id,
+              { ciphertext: '', iv: '' },
+              new Date(conversation.created_at).getTime()
+            );
+          }
         }
       }
 
@@ -227,23 +228,22 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
       for (const conversationId of newConversationIds) {
         try {
-          const stored = await loadThread(conversationId);
-          if (stored) {
-            const metadata = await decryptFn(stored.encrypted);
-            // Find the other participant
-            const otherParticipant = metadata.participants.find((p: string) => p !== myUserId);
+            const stored = await loadConversation(conversationId);
+            if (stored) {
+              let metadata: any = null;
+              if (stored.encrypted.ciphertext && stored.encrypted.iv) {
+                metadata = await decryptFn(stored.encrypted);
+              }
 
-            if (otherParticipant) {
               newConversations.push({
                 conversationId,
-                participantId: otherParticipant,
-                participantUsername: 'Unknown', // Will update on lookup
-                createdAt: metadata.created_at,
+                participantId: metadata?.participants?.find((p: string) => p !== myUserId) || '',
+                participantUsername: 'Unknown',
+                createdAt: metadata?.created_at || Date.now(),
                 lastMessageAt: stored.lastMessageAt,
                 unreadCount: 0
               });
             }
-          }
         } catch (e) {
           console.warn(`Could not load conversation ${conversationId}`, e);
         }
@@ -276,7 +276,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
     // Try to load conversation from server
     try {
-      const stored = await loadThread(conversationId);
+      const stored = await loadConversation(conversationId);
       if (stored) {
         const metadata = await decryptFn(stored.encrypted);
         // Verify this conversation involves us and the sender

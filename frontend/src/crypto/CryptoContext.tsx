@@ -5,11 +5,11 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { deriveVaultKey, clearKeyMaterial } from './kdf';
-import { deriveThreadKey, computeThreadId } from './thread-key';
+import { deriveConversationKey, computeConversationId } from './conversation-key';
 import { deriveIdentityKey, deriveContactsKey } from './identity-key';
 import { encrypt, decrypt, encryptJSON, decryptJSON } from './aes';
 import { clearStoredVaultKey, clearSessionVaultKey } from '../services/vaultStorage';
-import type { VaultKey, ThreadKey, EncryptedData } from '../types/crypto';
+import type { VaultKey, ConversationKey, EncryptedData } from '../types/crypto';
 
 interface CryptoContextValue {
   // State
@@ -20,15 +20,15 @@ interface CryptoContextValue {
   unlockVaultWithKey: (key: VaultKey | CryptoKey) => Promise<void>;
   lockVault: (options?: { clearStoredKey?: boolean }) => Promise<void>;
 
-  // Thread key operations
-  getThreadKey: (myUUID: string, otherUUID: string) => Promise<ThreadKey>;
-  getThreadId: (myUUID: string, otherUUID: string) => Promise<string>;
+  // Conversation key operations
+  getConversationKey: (myUUID: string, otherUUID: string) => Promise<ConversationKey>;
+  getConversationId: (myUUID: string, otherUUID: string) => Promise<string>;
 
   // Encryption operations
-  encryptMessage: (threadKey: ThreadKey, message: string) => Promise<EncryptedData>;
-  decryptMessage: (threadKey: ThreadKey, encrypted: EncryptedData) => Promise<string>;
-  encryptForThread: <T>(threadKey: ThreadKey, data: T) => Promise<EncryptedData>;
-  decryptForThread: <T>(threadKey: ThreadKey, encrypted: EncryptedData) => Promise<T>;
+  encryptMessage: (conversationKey: ConversationKey, message: string) => Promise<EncryptedData>;
+  decryptMessage: (conversationKey: ConversationKey, encrypted: EncryptedData) => Promise<string>;
+  encryptForConversation: <T>(conversationKey: ConversationKey, data: T) => Promise<EncryptedData>;
+  decryptForConversation: <T>(conversationKey: ConversationKey, encrypted: EncryptedData) => Promise<T>;
 
   // Identity operations
   encryptIdentity: <T>(data: T) => Promise<EncryptedData>;
@@ -46,8 +46,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const [identityKey, setIdentityKey] = useState<CryptoKey | null>(null);
   const [contactsKey, setContactsKey] = useState<CryptoKey | null>(null);
 
-  // Thread key cache
-  const [threadKeyCache] = useState(new Map<string, ThreadKey>());
+  // Conversation key cache
+  const [conversationKeyCache] = useState(new Map<string, ConversationKey>());
 
   const isUnlocked = vaultKey !== null;
 
@@ -93,62 +93,62 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     setVaultKey(null);
     setIdentityKey(null);
     setContactsKey(null);
-    threadKeyCache.clear();
-  }, [vaultKey, threadKeyCache]);
+    conversationKeyCache.clear();
+  }, [vaultKey, conversationKeyCache]);
 
-  // Get or derive thread key
-  const getThreadKey = useCallback(async (myUUID: string, otherUUID: string): Promise<ThreadKey> => {
+  // Get or derive conversation key
+  const getConversationKey = useCallback(async (myUUID: string, otherUUID: string): Promise<ConversationKey> => {
     if (!vaultKey) {
       throw new Error('Vault not unlocked');
     }
 
     const cacheKey = [myUUID, otherUUID].sort().join(':');
 
-    if (threadKeyCache.has(cacheKey)) {
-      return threadKeyCache.get(cacheKey)!;
+    if (conversationKeyCache.has(cacheKey)) {
+      return conversationKeyCache.get(cacheKey)!;
     }
 
-    const threadKey = await deriveThreadKey(vaultKey, myUUID, otherUUID);
-    threadKeyCache.set(cacheKey, threadKey);
+    const conversationKey = await deriveConversationKey(vaultKey, myUUID, otherUUID);
+    conversationKeyCache.set(cacheKey, conversationKey);
 
-    return threadKey;
-  }, [vaultKey, threadKeyCache]);
+    return conversationKey;
+  }, [vaultKey, conversationKeyCache]);
 
-  // Compute thread ID
-  const getThreadId = useCallback(async (myUUID: string, otherUUID: string): Promise<string> => {
-    return computeThreadId(myUUID, otherUUID);
+  // Compute conversation ID
+  const getConversationId = useCallback(async (myUUID: string, otherUUID: string): Promise<string> => {
+    return computeConversationId(myUUID, otherUUID);
   }, []);
 
   // Encrypt message (string)
   const encryptMessage = useCallback(async (
-    threadKey: ThreadKey,
+    conversationKey: ConversationKey,
     message: string
   ): Promise<EncryptedData> => {
-    return encrypt(threadKey.key, message);
+    return encrypt(conversationKey.key, message);
   }, []);
 
   // Decrypt message (string)
   const decryptMessage = useCallback(async (
-    threadKey: ThreadKey,
+    conversationKey: ConversationKey,
     encrypted: EncryptedData
   ): Promise<string> => {
-    return decrypt(threadKey.key, encrypted);
+    return decrypt(conversationKey.key, encrypted);
   }, []);
 
-  // Encrypt JSON for thread
-  const encryptForThread = useCallback(async <T,>(
-    threadKey: ThreadKey,
+  // Encrypt JSON for conversation
+  const encryptForConversation = useCallback(async <T,>(
+    conversationKey: ConversationKey,
     data: T
   ): Promise<EncryptedData> => {
-    return encryptJSON(threadKey.key, data);
+    return encryptJSON(conversationKey.key, data);
   }, []);
 
-  // Decrypt JSON for thread
-  const decryptForThread = useCallback(async <T,>(
-    threadKey: ThreadKey,
+  // Decrypt JSON for conversation
+  const decryptForConversation = useCallback(async <T,>(
+    conversationKey: ConversationKey,
     encrypted: EncryptedData
   ): Promise<T> => {
-    return decryptJSON<T>(threadKey.key, encrypted);
+    return decryptJSON<T>(conversationKey.key, encrypted);
   }, []);
 
   // Encrypt identity
@@ -210,12 +210,12 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     unlockVault,
     unlockVaultWithKey,
     lockVault,
-    getThreadKey,
-    getThreadId,
+    getConversationKey,
+    getConversationId,
     encryptMessage,
     decryptMessage,
-    encryptForThread,
-    decryptForThread,
+    encryptForConversation,
+    decryptForConversation,
     encryptIdentity: encryptIdentityFn,
     decryptIdentity: decryptIdentityFn,
     encryptContacts,

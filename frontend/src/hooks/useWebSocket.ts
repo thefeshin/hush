@@ -10,7 +10,7 @@ import type { EncryptedData } from '../types/crypto';
 interface UseWebSocketReturn {
   isConnected: boolean;
   connectionState: ConnectionState;
-  sendMessage: (conversationId: string, encrypted: EncryptedData) => Promise<{ id: string }>;
+  sendMessage: (conversationId: string, encrypted: EncryptedData, recipientId?: string) => Promise<{ id: string }>;
   subscribe: (conversationId: string) => void;
   unsubscribe: (conversationId: string) => void;
   disconnect: () => void;
@@ -19,8 +19,8 @@ interface UseWebSocketReturn {
 export function useWebSocket(): UseWebSocketReturn {
   const realtime = useRealtime();
 
-  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData) => {
-    return realtime.sendMessage(conversationId, encrypted);
+  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string) => {
+    return realtime.sendMessage(conversationId, encrypted, recipientId);
   }, [realtime]);
 
   const subscribe = useCallback((conversationId: string) => {

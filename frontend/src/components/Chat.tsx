@@ -21,7 +21,7 @@ export function Chat({ onNavigate }: ChatProps) {
   const user = useAuthStore(state => state.user);
   const { contacts, loadAllContacts } = useContactStore();
   const { activeConversationId, loadAllConversations, discoverConversations } = useConversationStore();
-  const { decryptContacts, getThreadId, decryptIdentity } = useCrypto();
+  const { decryptContacts, getConversationId, decryptIdentity } = useCrypto();
   const [hasDiscovered, setHasDiscovered] = useState(false);
 
   // Default no-op handler if onNavigate not provided
@@ -40,7 +40,7 @@ export function Chat({ onNavigate }: ChatProps) {
       loadAllConversations(
         user.id,
         contacts,
-        getThreadId,
+        getConversationId,
         decryptIdentity
       );
     }

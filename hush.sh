@@ -13,16 +13,22 @@ cd "$SCRIPT_DIR"
 COMPOSE_CMD=()
 
 print_banner() {
+    local -a banner_lines=(
+        "  _   _ _   _ ____  _   _"
+        " | | | | | | / ___|| | | |"
+        " | |_| | | | \\___ \\| |_| |"
+        " |  _  | |_| |___) |  _  |"
+        " |_| |_|\\___/|____/|_| |_|"
+        ""
+        " Zero-Knowledge Encrypted Chat Vault"
+    )
+
     echo ""
-    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║     ██╗  ██╗██╗   ██╗███████╗██╗  ██╗                    ║${NC}"
-    echo -e "${CYAN}║     ██║  ██║██║   ██║██╔════╝██║  ██║                    ║${NC}"
-    echo -e "${CYAN}║     ███████║██║   ██║███████╗███████║                    ║${NC}"
-    echo -e "${CYAN}║     ██╔══██║██║   ██║╚════██║██╔══██║                    ║${NC}"
-    echo -e "${CYAN}║     ██║  ██║╚██████╔╝███████║██║  ██║                    ║${NC}"
-    echo -e "${CYAN}║     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝                    ║${NC}"
-    echo -e "${CYAN}║     Zero-Knowledge Encrypted Chat Vault                   ║${NC}"
-    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${CYAN}+-----------------------------------------------------------+${NC}"
+    for line in "${banner_lines[@]}"; do
+        printf "%b\n" "${CYAN}|$(printf '%-59s' "$line")|${NC}"
+    done
+    echo -e "${CYAN}+-----------------------------------------------------------+${NC}"
     echo ""
 }
 
@@ -42,10 +48,6 @@ choose_compose_cmd() {
 }
 
 docker_deploy() {
-    echo ""
-    echo -e "${CYAN}[HUSH] Docker deployment selected${NC}"
-    echo ""
-
     if ! command -v docker >/dev/null 2>&1; then
         echo -e "${RED}[HUSH] ERROR: Docker is not installed${NC}"
         exit 1
@@ -64,6 +66,7 @@ docker_deploy() {
         echo -e "${GREEN}[HUSH] Access your vault at: https://localhost${NC}"
     else
         export PYTHONPATH="$SCRIPT_DIR/cli:$PYTHONPATH"
+        export HUSH_NO_BANNER=1
         python3 -c "
 import sys
 sys.path.insert(0, 'cli')
@@ -108,9 +111,6 @@ check_existing_env() {
 }
 
 print_banner
-
-echo "[HUSH] Deployment mode: Docker"
-echo ""
 
 check_existing_env
 ENV_RESULT=$?

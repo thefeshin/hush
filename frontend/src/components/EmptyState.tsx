@@ -1,5 +1,5 @@
 /**
- * Empty state when no thread is selected
+ * Empty state when no conversation is selected
  */
 
 

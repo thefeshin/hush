@@ -111,7 +111,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
 
       <div className="sidebar-content">
         {activeTab === 'chats' && (
-          <div className="thread-list">
+          <div className="conversation-list">
             {conversations.length === 0 ? (
               <div className="empty-list">
                 <p>No conversations yet</p>
@@ -121,17 +121,17 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               conversations.map(conversation => (
                 <div
                   key={conversation.conversationId}
-                  className={`thread-item ${conversation.conversationId === activeConversationId ? 'active' : ''}`}
+                  className={`conversation-item ${conversation.conversationId === activeConversationId ? 'active' : ''}`}
                   onClick={() => setActiveConversation(conversation.conversationId)}
                 >
-                  <div className="thread-avatar">
+                  <div className="conversation-avatar">
                     {conversation.participantUsername[0].toUpperCase()}
                   </div>
-                  <div className="thread-info">
-                    <div className="thread-name">
+                  <div className="conversation-info">
+                    <div className="conversation-name">
                       {conversation.participantUsername === 'Unknown' ? 'Unknown Contact' : conversation.participantUsername}
                     </div>
-                    <div className="thread-time">{formatTime(conversation.lastMessageAt)}</div>
+                    <div className="conversation-time">{formatTime(conversation.lastMessageAt)}</div>
                   </div>
                   {conversation.unreadCount > 0 && (
                     <div className="unread-badge">{conversation.unreadCount}</div>
@@ -185,7 +185,7 @@ function ContactItem({
   user: { id: string; username: string };
 }) {
   const { getOrCreateConversation } = useConversationStore();
-  const { getThreadId, encryptIdentity } = useCrypto();
+  const { getConversationId, encryptIdentity } = useCrypto();
 
   const handleStartChat = async () => {
     const conversation = await getOrCreateConversation(
@@ -193,34 +193,10 @@ function ContactItem({
       user.username,
       contact.id,
       contact.username,
-      getThreadId,
+      getConversationId,
       encryptIdentity
     );
-
-    // Also create thread on server if it was newly created
-    if (conversation) {
-      try {
-        const { getSyncService } = await import('../services/sync');
-        const syncService = getSyncService();
-        const encrypted = await encryptIdentity({
-          participants: [user.id, contact.id].sort(),
-          created_by: { user_id: user.id, display_name: user.username },
-          created_at: conversation.createdAt
-        });
-
-        // Sort participant IDs for thread_participants table
-        const sortedParticipants = [user.id, contact.id].sort();
-        await syncService.createThread(
-          conversation.conversationId,
-          encrypted,
-          sortedParticipants[0], // participant_1 (lower UUID)
-          sortedParticipants[1]  // participant_2 (higher UUID)
-        );
-      } catch (err) {
-        // Thread might already exist on server, that's ok
-        console.log('Thread may already exist on server');
-      }
-    }
+    void conversation;
   };
 
   return (

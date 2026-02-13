@@ -18,8 +18,8 @@ interface Props {
 export function ConversationView({ conversationId }: Props) {
   const user = useAuthStore(state => state.user);
   const { getConversation } = useConversationStore();
-  const { loadMessagesForThread, getMessages } = useMessageStore();
-  const { getThreadKey, decryptMessage } = useCrypto();
+  const { loadMessagesForConversation, getMessages } = useMessageStore();
+  const { getConversationKey, decryptMessage } = useCrypto();
 
   const conversation = getConversation(conversationId);
   const messages = getMessages(conversationId);
@@ -37,10 +37,10 @@ export function ConversationView({ conversationId }: Props) {
   const loadConversationMessages = async () => {
     if (!user || !conversation) return;
 
-    const threadKey = await getThreadKey(user.id, conversation.participantId);
+    const conversationKey = await getConversationKey(user.id, conversation.participantId);
 
-    await loadMessagesForThread(conversationId, async (encrypted) => {
-      return decryptMessage(threadKey, encrypted);
+    await loadMessagesForConversation(conversationId, async (encrypted) => {
+      return decryptMessage(conversationKey, encrypted);
     });
   };
 

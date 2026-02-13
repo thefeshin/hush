@@ -8,7 +8,7 @@ import type { EncryptedData, MessagePayload } from '../types/crypto';
 
 interface Message {
   id: string;
-  threadId: string;
+  conversationId: string;
   senderId: string;
   senderName: string;
   content: string;
@@ -17,24 +17,24 @@ interface Message {
 }
 
 interface MessageState {
-  messagesByThread: Map<string, Message[]>;
+  messagesByConversation: Map<string, Message[]>;
   isLoading: boolean;
 
   // Actions
-  loadMessagesForThread: (
-    threadId: string,
+  loadMessagesForConversation: (
+    conversationId: string,
     decryptFn: (encrypted: EncryptedData) => Promise<string>
   ) => Promise<void>;
   addMessage: (message: Message) => void;
   addPendingMessage: (
-    threadId: string,
+    conversationId: string,
     content: string,
     senderId: string,
     senderName: string
   ) => string;
   markMessageSent: (tempId: string, realId: string) => void;
   markMessageFailed: (tempId: string) => void;
-  getMessages: (threadId: string) => Message[];
+  getMessages: (conversationId: string) => Message[];
 }
 
 // Generate temporary ID for pending messages
@@ -43,14 +43,14 @@ function generateTempId(): string {
 }
 
 export const useMessageStore = create<MessageState>((set, get) => ({
-  messagesByThread: new Map(),
+  messagesByConversation: new Map(),
   isLoading: false,
 
-  loadMessagesForThread: async (threadId, decryptFn) => {
+  loadMessagesForConversation: async (conversationId, decryptFn) => {
     set({ isLoading: true });
 
     try {
-      const stored = await loadMessages(threadId, 100);
+      const stored = await loadMessages(conversationId, 100);
       const messages: Message[] = [];
 
       for (const { id, encrypted } of stored) {
@@ -60,7 +60,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
           messages.push({
             id,
-            threadId,
+            conversationId,
             senderId: payload.sender_id,
             senderName: payload.sender_name,
             content: payload.content,
@@ -73,9 +73,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       }
 
       set(state => {
-        const newMap = new Map(state.messagesByThread);
-        newMap.set(threadId, messages);
-        return { messagesByThread: newMap, isLoading: false };
+        const newMap = new Map(state.messagesByConversation);
+        newMap.set(conversationId, messages);
+        return { messagesByConversation: newMap, isLoading: false };
       });
     } catch (err) {
       console.error('Failed to load messages', err);
@@ -85,24 +85,24 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
   addMessage: (message) => {
     set(state => {
-      const newMap = new Map(state.messagesByThread);
-      const existing = newMap.get(message.threadId) || [];
+      const newMap = new Map(state.messagesByConversation);
+      const existing = newMap.get(message.conversationId) || [];
 
       // Check for duplicate
       if (existing.some(m => m.id === message.id)) {
         return state;
       }
 
-      newMap.set(message.threadId, [...existing, message]);
-      return { messagesByThread: newMap };
+      newMap.set(message.conversationId, [...existing, message]);
+      return { messagesByConversation: newMap };
     });
   },
 
-  addPendingMessage: (threadId, content, senderId, senderName) => {
+  addPendingMessage: (conversationId, content, senderId, senderName) => {
     const tempId = generateTempId();
     const message: Message = {
       id: tempId,
-      threadId,
+      conversationId,
       senderId,
       senderName,
       content,
@@ -111,10 +111,10 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     };
 
     set(state => {
-      const newMap = new Map(state.messagesByThread);
-      const existing = newMap.get(threadId) || [];
-      newMap.set(threadId, [...existing, message]);
-      return { messagesByThread: newMap };
+      const newMap = new Map(state.messagesByConversation);
+      const existing = newMap.get(conversationId) || [];
+      newMap.set(conversationId, [...existing, message]);
+      return { messagesByConversation: newMap };
     });
 
     return tempId;
@@ -122,9 +122,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
   markMessageSent: (tempId, realId) => {
     set(state => {
-      const newMap = new Map(state.messagesByThread);
+      const newMap = new Map(state.messagesByConversation);
 
-      for (const [threadId, messages] of newMap) {
+      for (const [conversationId, messages] of newMap) {
         const updated = messages.map(m =>
           m.id === tempId ? { ...m, id: realId, status: 'sent' as const } : m
         );
@@ -140,29 +140,29 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         }
 
         deduped.reverse();
-        newMap.set(threadId, deduped);
+        newMap.set(conversationId, deduped);
       }
 
-      return { messagesByThread: newMap };
+      return { messagesByConversation: newMap };
     });
   },
 
   markMessageFailed: (tempId) => {
     set(state => {
-      const newMap = new Map(state.messagesByThread);
+      const newMap = new Map(state.messagesByConversation);
 
-      for (const [threadId, messages] of newMap) {
+      for (const [conversationId, messages] of newMap) {
         const updated = messages.map(m =>
           m.id === tempId ? { ...m, status: 'failed' as const } : m
         );
-        newMap.set(threadId, updated);
+        newMap.set(conversationId, updated);
       }
 
-      return { messagesByThread: newMap };
+      return { messagesByConversation: newMap };
     });
   },
 
-  getMessages: (threadId) => {
-    return get().messagesByThread.get(threadId) || [];
+  getMessages: (conversationId) => {
+    return get().messagesByConversation.get(conversationId) || [];
   }
 }));

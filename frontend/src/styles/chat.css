@@ -115,13 +115,13 @@
   overflow-y: auto;
 }
 
-/* Thread List */
-.thread-list {
+/* Conversation List */
+.conversation-list {
   display: flex;
   flex-direction: column;
 }
 
-.thread-item {
+.conversation-item {
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
@@ -130,16 +130,16 @@
   transition: background 0.2s;
 }
 
-.thread-item:hover {
+.conversation-item:hover {
   background: var(--bg-tertiary);
 }
 
-.thread-item.active {
+.conversation-item.active {
   background: var(--bg-tertiary);
   border-left: 3px solid var(--accent);
 }
 
-.thread-avatar,
+.conversation-avatar,
 .contact-avatar {
   width: 40px;
   height: 40px;
@@ -154,20 +154,20 @@
   flex-shrink: 0;
 }
 
-.thread-avatar.large {
+.conversation-avatar.large {
   width: 48px;
   height: 48px;
   font-size: 1.25rem;
 }
 
-.thread-info,
+.conversation-info,
 .contact-info {
   flex: 1;
   min-width: 0;
   margin-left: 0.75rem;
 }
 
-.thread-name,
+.conversation-name,
 .contact-name {
   font-weight: 500;
   white-space: nowrap;
@@ -175,7 +175,7 @@
   text-overflow: ellipsis;
 }
 
-.thread-time {
+.conversation-time {
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
@@ -260,13 +260,13 @@
   min-width: 0;
 }
 
-.thread-view {
+.conversation-view {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
-.thread-header {
+.conversation-header {
   display: flex;
   align-items: center;
   padding: 1rem;
@@ -274,22 +274,22 @@
   border-bottom: 1px solid var(--border);
 }
 
-.thread-title {
+.conversation-title {
   margin-left: 1rem;
 }
 
-.thread-title h2 {
+.conversation-title h2 {
   margin: 0;
   font-size: 1.125rem;
 }
 
-.thread-uuid {
+.conversation-uuid {
   font-size: 0.75rem;
   color: var(--text-secondary);
   font-family: monospace;
 }
 
-.thread-not-found {
+.conversation-not-found {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -593,7 +593,7 @@
     max-width: 85%;
   }
 
-  .thread-avatar.large {
+  .conversation-avatar.large {
     width: 40px;
     height: 40px;
     font-size: 1rem;
@@ -613,7 +613,7 @@
     font-size: 1.25rem;
   }
 
-  .thread-item,
+  .conversation-item,
   .contact-item {
     padding: 0.5rem 0.75rem;
   }

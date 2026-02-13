@@ -8,30 +8,31 @@ import type { EncryptedData } from '../types/crypto';
 // Message types from server
 interface ServerMessage {
   type: 'subscribed' | 'unsubscribed' | 'message' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed';
-  thread_id?: string;
+  conversation_id?: string;
   sender_id?: string;  // Sender's user ID (plaintext, for auto-discovery)
   id?: string;
   ciphertext?: string;
   iv?: string;
   created_at?: string;
   message?: string;
-  thread_count?: number;
+  conversation_count?: number;
 }
 
 // Message types to server
 interface ClientSubscribe {
   type: 'subscribe';
-  thread_id: string;
+  conversation_id: string;
 }
 
 interface ClientUnsubscribe {
   type: 'unsubscribe';
-  thread_id: string;
+  conversation_id: string;
 }
 
 interface ClientMessage {
   type: 'message';
-  thread_id: string;
+  conversation_id: string;
+  recipient_id?: string;
   ciphertext: string;
   iv: string;
 }
@@ -69,7 +70,7 @@ export class WebSocketService {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Subscriptions
-  private subscribedThreads = new Set<string>();
+  private subscribedConversations = new Set<string>();
   private pendingSubscriptions = new Set<string>();
 
   // Event handlers
@@ -80,7 +81,7 @@ export class WebSocketService {
   private pendingMessages = new Map<string, {
     resolve: (result: { id: string }) => void;
     reject: (error: Error) => void;
-    threadId: string;
+    conversationId: string;
     ciphertext: string;
     iv: string;
   }>();
@@ -156,42 +157,42 @@ export class WebSocketService {
     }
 
     this.state = ConnectionState.DISCONNECTED;
-    this.subscribedThreads.clear();
+    this.subscribedConversations.clear();
     this.pendingSubscriptions.clear();
     this.notifyConnectionHandlers(false);
   }
 
   /**
-   * Subscribe to a thread for real-time updates
+   * Subscribe to a conversation for real-time updates
    */
-  subscribe(threadId: string): void {
-    if (this.subscribedThreads.has(threadId)) {
+  subscribe(conversationId: string): void {
+    if (this.subscribedConversations.has(conversationId)) {
       return;
     }
 
-    this.pendingSubscriptions.add(threadId);
+    this.pendingSubscriptions.add(conversationId);
 
     if (this.state === ConnectionState.CONNECTED && this.ws) {
-      this.send({ type: 'subscribe', thread_id: threadId });
+      this.send({ type: 'subscribe', conversation_id: conversationId });
     }
   }
 
   /**
-   * Unsubscribe from a thread
+   * Unsubscribe from a conversation
    */
-  unsubscribe(threadId: string): void {
-    this.subscribedThreads.delete(threadId);
-    this.pendingSubscriptions.delete(threadId);
+  unsubscribe(conversationId: string): void {
+    this.subscribedConversations.delete(conversationId);
+    this.pendingSubscriptions.delete(conversationId);
 
     if (this.state === ConnectionState.CONNECTED && this.ws) {
-      this.send({ type: 'unsubscribe', thread_id: threadId });
+      this.send({ type: 'unsubscribe', conversation_id: conversationId });
     }
   }
 
   /**
    * Send an encrypted message
    */
-  sendMessage(threadId: string, encrypted: EncryptedData): Promise<{ id: string }> {
+  sendMessage(conversationId: string, encrypted: EncryptedData, recipientId?: string): Promise<{ id: string }> {
     return new Promise((resolve, reject) => {
       if (this.state !== ConnectionState.CONNECTED || !this.ws) {
         reject(new Error('Not connected'));
@@ -205,18 +206,19 @@ export class WebSocketService {
       this.pendingMessages.set(tempId, {
         resolve,
         reject,
-        threadId,
+        conversationId,
         ciphertext: encrypted.ciphertext,
         iv: encrypted.iv
       });
 
       // Send message
-      this.send({
-        type: 'message',
-        thread_id: threadId,
-        ciphertext: encrypted.ciphertext,
-        iv: encrypted.iv
-      });
+        this.send({
+          type: 'message',
+          conversation_id: conversationId,
+          recipient_id: recipientId,
+          ciphertext: encrypted.ciphertext,
+          iv: encrypted.iv
+        });
 
       // Timeout after 10 seconds
       setTimeout(() => {
@@ -260,15 +262,15 @@ export class WebSocketService {
   }
 
   /**
-   * Get subscribed thread IDs
+   * Get subscribed conversation IDs
    */
-  getSubscribedThreads(): string[] {
-    return Array.from(this.subscribedThreads);
+  getSubscribedConversations(): string[] {
+    return Array.from(this.subscribedConversations);
   }
 
   /**
-   * Subscribe to all threads for the current user
-   * This enables automatic discovery of threads from unknown contacts
+   * Subscribe to all conversations for the current user
+   * This enables automatic discovery from unknown contacts
    */
   subscribeToUser(): void {
     if (this.state === ConnectionState.CONNECTED && this.ws) {
@@ -290,15 +292,15 @@ export class WebSocketService {
 
       switch (msg.type) {
         case 'subscribed':
-          if (msg.thread_id) {
-            this.subscribedThreads.add(msg.thread_id);
-            this.pendingSubscriptions.delete(msg.thread_id);
+          if (msg.conversation_id) {
+            this.subscribedConversations.add(msg.conversation_id);
+            this.pendingSubscriptions.delete(msg.conversation_id);
           }
           break;
 
         case 'unsubscribed':
-          if (msg.thread_id) {
-            this.subscribedThreads.delete(msg.thread_id);
+          if (msg.conversation_id) {
+            this.subscribedConversations.delete(msg.conversation_id);
           }
           break;
 
@@ -325,13 +327,13 @@ export class WebSocketService {
   }
 
   private handleIncomingMessage(msg: ServerMessage): void {
-    // Resolve any pending send for this thread
+    // Resolve any pending send for this conversation
     // Note: The server echoes our own messages back
-    if (msg.id && msg.thread_id) {
+    if (msg.id && msg.conversation_id) {
       if (msg.ciphertext && msg.iv) {
         for (const [tempId, pending] of this.pendingMessages) {
           if (
-            pending.threadId === msg.thread_id
+            pending.conversationId === msg.conversation_id
             && pending.ciphertext === msg.ciphertext
             && pending.iv === msg.iv
           ) {
@@ -391,12 +393,12 @@ export class WebSocketService {
   }
 
   private resubscribeAll(): void {
-    // Resubscribe to all previously subscribed threads
-    const allThreads = new Set([...this.subscribedThreads, ...this.pendingSubscriptions]);
-    this.subscribedThreads.clear();
+    // Resubscribe to all previously subscribed conversations
+    const allConversations = new Set([...this.subscribedConversations, ...this.pendingSubscriptions]);
+    this.subscribedConversations.clear();
 
-    for (const threadId of allThreads) {
-      this.subscribe(threadId);
+    for (const conversationId of allConversations) {
+      this.subscribe(conversationId);
     }
   }
 

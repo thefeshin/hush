@@ -19,7 +19,7 @@ class Connection:
     """Represents an active WebSocket connection"""
     websocket: WebSocket
     connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    subscribed_threads: Set[str] = field(default_factory=set)
+    subscribed_conversations: Set[str] = field(default_factory=set)
     last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     message_timestamps: Deque[float] = field(default_factory=deque)
 
@@ -30,17 +30,17 @@ class WebSocketManager:
 
     Key design decisions:
     - No user identification (zero-knowledge)
-    - Connections subscribe to thread_ids
-    - Messages broadcast to thread subscribers only
+    - Connections subscribe to conversation_ids
+    - Messages broadcast to conversation subscribers only
     - Server never inspects message content
     """
 
     def __init__(self):
         # All active connections
         self._connections: Dict[WebSocket, Connection] = {}
-        # Thread ID -> Set of connections subscribed to it
-        self._thread_subscriptions: Dict[str, Set[WebSocket]] = {}
-        # Lock for thread-safe operations
+        # Conversation ID -> Set of connections subscribed to it
+        self._conversation_subscriptions: Dict[str, Set[WebSocket]] = {}
+        # Lock for concurrent operations
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket) -> Connection:
@@ -59,50 +59,50 @@ class WebSocketManager:
             connection = self._connections.pop(websocket, None)
 
             if connection:
-                # Remove from all thread subscriptions
-                for thread_id in connection.subscribed_threads:
-                    if thread_id in self._thread_subscriptions:
-                        self._thread_subscriptions[thread_id].discard(websocket)
+                # Remove from all conversation subscriptions
+                for conversation_id in connection.subscribed_conversations:
+                    if conversation_id in self._conversation_subscriptions:
+                        self._conversation_subscriptions[conversation_id].discard(websocket)
                         # Clean up empty sets
-                        if not self._thread_subscriptions[thread_id]:
-                            del self._thread_subscriptions[thread_id]
+                        if not self._conversation_subscriptions[conversation_id]:
+                            del self._conversation_subscriptions[conversation_id]
 
-    async def subscribe_to_thread(self, websocket: WebSocket, thread_id: str):
-        """Subscribe a connection to a thread"""
+    async def subscribe_to_conversation(self, websocket: WebSocket, conversation_id: str):
+        """Subscribe a connection to a conversation"""
         async with self._lock:
             connection = self._connections.get(websocket)
             if not connection:
                 return
 
-            connection.subscribed_threads.add(thread_id)
+            connection.subscribed_conversations.add(conversation_id)
             connection.last_activity = datetime.now(timezone.utc)
 
-            if thread_id not in self._thread_subscriptions:
-                self._thread_subscriptions[thread_id] = set()
-            self._thread_subscriptions[thread_id].add(websocket)
+            if conversation_id not in self._conversation_subscriptions:
+                self._conversation_subscriptions[conversation_id] = set()
+            self._conversation_subscriptions[conversation_id].add(websocket)
 
-    async def unsubscribe_from_thread(self, websocket: WebSocket, thread_id: str):
-        """Unsubscribe a connection from a thread"""
+    async def unsubscribe_from_conversation(self, websocket: WebSocket, conversation_id: str):
+        """Unsubscribe a connection from a conversation"""
         async with self._lock:
             connection = self._connections.get(websocket)
             if not connection:
                 return
 
-            connection.subscribed_threads.discard(thread_id)
+            connection.subscribed_conversations.discard(conversation_id)
             connection.last_activity = datetime.now(timezone.utc)
 
-            if thread_id in self._thread_subscriptions:
-                self._thread_subscriptions[thread_id].discard(websocket)
-                if not self._thread_subscriptions[thread_id]:
-                    del self._thread_subscriptions[thread_id]
+            if conversation_id in self._conversation_subscriptions:
+                self._conversation_subscriptions[conversation_id].discard(websocket)
+                if not self._conversation_subscriptions[conversation_id]:
+                    del self._conversation_subscriptions[conversation_id]
 
-    async def broadcast_to_thread(self, thread_id: str, message: dict):
+    async def broadcast_to_conversation(self, conversation_id: str, message: dict):
         """
-        Broadcast a message to all connections subscribed to a thread
+        Broadcast a message to all connections subscribed to a conversation
         Message is sent as-is (encrypted blob from client)
         """
         async with self._lock:
-            subscribers = self._thread_subscriptions.get(thread_id, set()).copy()
+            subscribers = self._conversation_subscriptions.get(conversation_id, set()).copy()
 
         # Send to all subscribers (outside lock)
         dead_connections = []
@@ -132,13 +132,13 @@ class WebSocketManager:
             if connection:
                 connection.last_activity = datetime.now(timezone.utc)
 
-    async def is_subscribed_to_thread(self, websocket: WebSocket, thread_id: str) -> bool:
-        """Check whether a connection is already subscribed to a thread."""
+    async def is_subscribed_to_conversation(self, websocket: WebSocket, conversation_id: str) -> bool:
+        """Check whether a connection is already subscribed to a conversation."""
         async with self._lock:
             connection = self._connections.get(websocket)
             if not connection:
                 return False
-            return thread_id in connection.subscribed_threads
+            return conversation_id in connection.subscribed_conversations
 
     async def get_subscription_count(self, websocket: WebSocket) -> int:
         """Return current subscription count for a connection."""
@@ -146,7 +146,7 @@ class WebSocketManager:
             connection = self._connections.get(websocket)
             if not connection:
                 return 0
-            return len(connection.subscribed_threads)
+            return len(connection.subscribed_conversations)
 
     async def allow_incoming_message(
         self,
@@ -184,19 +184,19 @@ class WebSocketManager:
         return len(self._connections)
 
     @property
-    def thread_subscription_counts(self) -> Dict[str, int]:
-        """Get subscription count per thread"""
+    def conversation_subscription_counts(self) -> Dict[str, int]:
+        """Get subscription count per conversation"""
         return {
-            thread_id: len(subs)
-            for thread_id, subs in self._thread_subscriptions.items()
+            conversation_id: len(subs)
+            for conversation_id, subs in self._conversation_subscriptions.items()
         }
 
     def get_stats(self) -> dict:
         """Get WebSocket manager statistics"""
         return {
             "total_connections": self.connection_count,
-            "threads_with_subscribers": len(self._thread_subscriptions),
-            "subscription_counts": self.thread_subscription_counts
+            "conversations_with_subscribers": len(self._conversation_subscriptions),
+            "subscription_counts": self.conversation_subscription_counts
         }
 
 

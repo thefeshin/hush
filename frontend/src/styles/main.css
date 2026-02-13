@@ -348,23 +348,23 @@ body {
   color: var(--accent);
 }
 
-.thread-list {
+.conversation-list {
   flex: 1;
   overflow-y: auto;
 }
 
-.thread-item {
+.conversation-item {
   padding: 1rem;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.2s;
 }
 
-.thread-item:hover {
+.conversation-item:hover {
   background: var(--bg-tertiary);
 }
 
-.thread-item.active {
+.conversation-item.active {
   background: var(--bg-tertiary);
   border-left: 3px solid var(--accent);
 }

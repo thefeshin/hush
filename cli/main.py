@@ -111,7 +111,7 @@ def ensure_ssl_certificates():
 
 def run_setup():
     """Run all prerequisite checks and setup"""
-    print("[HUSH] Checking prerequisites...\n")
+    print("[HUSH] Checking prerequisites...")
 
     # Step 1: Install dependencies if needed
     if not ensure_dependencies():
@@ -121,7 +121,6 @@ def run_setup():
     if not ensure_ssl_certificates():
         return False
 
-    print("")
     return True
 
 
@@ -193,7 +192,8 @@ def main():
     # Import modules after dependencies are installed
     SecurityPrompts, SecretGenerator, ConfigManager = get_modules()
 
-    print_banner()
+    if os.getenv("HUSH_NO_BANNER") != "1":
+        print_banner()
 
     # Check for existing deployment (unless shell script already handled it)
     config_manager = ConfigManager()
@@ -202,17 +202,17 @@ def main():
             sys.exit(0)
 
     # Step 1: Collect security configuration
-    print("\n[HUSH] Configuring security policy...\n")
+    print("[HUSH] Configuring security policy...")
     prompts = SecurityPrompts()
     security_config = prompts.collect_all()
 
     # Step 2: Generate secrets
-    print("\n[HUSH] Generating cryptographic secrets...\n")
+    print("[HUSH] Generating cryptographic secrets...")
     generator = SecretGenerator()
     secrets = generator.generate_all()
 
     # Step 3: Write configuration (temporarily - will delete on failure)
-    print("[HUSH] Writing configuration...\n")
+    print("[HUSH] Writing configuration...")
     config_manager.write_env(security_config, secrets)
 
     compose_cmd = get_compose_command()
@@ -222,7 +222,7 @@ def main():
         sys.exit(1)
 
     # Step 4: Build containers (BEFORE showing secrets)
-    print("[HUSH] Building containers...\n")
+    print("[HUSH] Building containers...")
     build_result = subprocess.run(
         [*compose_cmd, 'build'],
         capture_output=False
@@ -235,7 +235,7 @@ def main():
         sys.exit(1)
 
     # Step 5: Start services
-    print("\n[HUSH] Starting services...\n")
+    print("[HUSH] Starting services...")
     run_result = subprocess.run(
         [*compose_cmd, 'up', '-d'],
         capture_output=False
