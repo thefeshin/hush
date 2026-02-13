@@ -51,4 +51,4 @@ def get_client_ip(request: Request) -> str:
     if normalized_remote:
         return normalized_remote
 
-    return "unknown"
+    return "0.0.0.0"

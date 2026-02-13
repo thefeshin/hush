@@ -7,6 +7,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+import asyncpg
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose import jwt, JWTError
@@ -241,15 +242,21 @@ async def register(
     password_hash = pwd_context.hash(register_request.password)
 
     # Create user
-    user = await conn.fetchrow(
-        """
-        INSERT INTO users (username, password_hash)
-        VALUES ($1, $2)
-        RETURNING id, username, created_at
-        """,
-        username,
-        password_hash
-    )
+    try:
+        user = await conn.fetchrow(
+            """
+            INSERT INTO users (username, password_hash)
+            VALUES ($1, $2)
+            RETURNING id, username, created_at
+            """,
+            username,
+            password_hash
+        )
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "username_taken", "message": "Username already taken"}
+        )
 
     user_id = user["id"]
     user_username = user["username"]
@@ -295,6 +302,9 @@ async def login(
     2. Verify username/password
     3. Create tokens and set cookies
     """
+    client_ip = get_client_ip(request)
+    defense = DefenseService(conn)
+
     # Verify vault token
     if not verify_vault_token(login_request.vault_token):
         raise HTTPException(
@@ -304,6 +314,20 @@ async def login(
 
     username = login_request.username.lower().strip()
 
+    if not auth_rate_limiter.is_allowed(client_ip) or not auth_rate_limiter.is_allowed(f"{client_ip}:{username}"):
+        log_rate_limited(client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"error": "rate_limited", "message": "Too many login attempts"}
+        )
+
+    block_status = await defense.check_ip_blocked(client_ip)
+    if block_status["blocked"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "ip_blocked", "message": "Access denied"}
+        )
+
     # Get user
     user = await conn.fetchrow(
         "SELECT id, username, password_hash FROM users WHERE username = $1",
@@ -311,6 +335,9 @@ async def login(
     )
 
     if not user:
+        remaining = await defense.record_failure(client_ip)
+        if remaining <= 0:
+            await defense.trigger_policy(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_credentials", "message": "Invalid username or password"}
@@ -318,6 +345,9 @@ async def login(
 
     # Verify password
     if not pwd_context.verify(login_request.password, user["password_hash"]):
+        remaining = await defense.record_failure(client_ip)
+        if remaining <= 0:
+            await defense.trigger_policy(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_credentials", "message": "Invalid username or password"}
@@ -327,6 +357,8 @@ async def login(
     user_username = user["username"]
 
     # Update last login
+    await defense.reset_failures(client_ip)
+
     await conn.execute(
         "UPDATE users SET last_login = NOW() WHERE id = $1",
         user_id

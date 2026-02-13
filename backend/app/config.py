@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     FRONTEND_URL: str = "https://localhost"
-    TRUST_PROXY_HEADERS: bool = True
+    TRUST_PROXY_HEADERS: bool = False
     TRUSTED_PROXY_CIDRS_RAW: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
     @property
