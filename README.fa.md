@@ -25,7 +25,7 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - [استقرار آنلاین (ماشین متصل به اینترنت)](#fa-online-deployment)
 - [روش پیشنهادی (تعامل‌محور)](#fa-online-guided)
 - [روش دستی Docker](#fa-online-manual)
-- [توسعه محلی (بدون استک کامل Docker)](#fa-local-development)
+- [توسعه محلی دستی (بدون حالت local در hush.sh)](#fa-local-development)
 - [استقرار آفلاین (Air-Gapped)](#fa-offline-deployment)
 - [روی ماشین دارای اینترنت](#fa-offline-build)
 - [انتقال به ماشین آفلاین](#fa-offline-transfer)
@@ -85,7 +85,7 @@ chmod +x ./hush.sh
 ./hush.sh
 ```
 
-در منو، حالت Docker را انتخاب کنید.  
+اسکریپت `hush.sh` اکنون فقط حالت Docker را اجرا می‌کند.  
 دسترسی: `https://localhost`
 
 <a id="fa-online-manual"></a>
@@ -96,6 +96,8 @@ docker compose build
 docker compose up -d
 docker compose ps
 ```
+
+bind mount مخصوص توسعه backend در `docker-compose.override.yml` نگه داشته شده است.
 
 <a id="fa-local-development"></a>
 ## توسعه محلی (بدون استک کامل Docker)
@@ -141,6 +143,8 @@ Linux/macOS:
 bash ./offline/build-bundle.sh
 ```
 
+اسکریپت‌های آفلاین برای Ubuntu 22.04 (jammy) معماری amd64 طراحی شده‌اند.
+
 خروجی‌ها:
 - `offline/hush-offline-bundle.tar` (همه Docker imageهای موردنیاز)
 - `offline/pkgs/docker/*.deb` (جدیدترین پکیج‌های Docker از مخزن Jammy)
@@ -172,7 +176,14 @@ bash ./offline/install-system-deps.sh
 bash ./offline/deploy-offline.sh
 ```
 
-اسکریپت `install-system-deps.sh`، Docker Engine + Compose plugin + Python3/PIP/venv را فقط از `.deb`های محلی نصب می‌کند (بدون شبکه).
+برای چرخش اجباری secretها در redeploy آفلاین:
+```bash
+bash ./offline/deploy-offline.sh --rotate-secrets
+```
+
+به‌صورت پیش‌فرض، `offline/deploy-offline.sh` فایل `.env` موجود را reuse می‌کند تا دسترسی به vault حفظ شود.
+
+اسکریپت `install-system-deps.sh`، Docker Engine + Compose plugin + Python3/PIP/venv را فقط از `.deb`های محلی نصب می‌کند (بدون شبکه) و قبل از نصب، صحت checksumها را به‌صورت اجباری بررسی می‌کند.
 
 <a id="fa-operations"></a>
 ## عملیات روزمره

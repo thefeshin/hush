@@ -25,7 +25,7 @@ The backend relays encrypted payloads and stores only metadata needed for routin
 - [Online Deployment (Connected Host)](#online-deployment-connected-host)
 - [Guided deployment (recommended)](#guided-deployment-recommended)
 - [Manual Docker deployment](#manual-docker-deployment)
-- [Local Development (Without Full Docker Stack)](#local-development-without-full-docker-stack)
+- [Local Development (Manual, No hush.sh local mode)](#local-development-manual-no-hushsh-local-mode)
 - [Offline Deployment (Air-Gapped)](#offline-deployment-air-gapped)
 - [On internet-connected machine](#on-internet-connected-machine)
 - [Transfer to air-gapped machine](#transfer-to-air-gapped-machine)
@@ -79,7 +79,7 @@ chmod +x ./hush.sh
 ./hush.sh
 ```
 
-Choose Docker mode in the prompt. Access app at `https://localhost`.
+`hush.sh` now runs Docker deployment only. Access app at `https://localhost`.
 
 ### Manual Docker deployment
 
@@ -89,7 +89,9 @@ docker compose up -d
 docker compose ps
 ```
 
-## Local Development (Without Full Docker Stack)
+Development-only backend hot-reload bind mount lives in `docker-compose.override.yml`.
+
+## Local Development (Manual, No hush.sh local mode)
 
 1. Start PostgreSQL:
 ```bash
@@ -130,6 +132,8 @@ Linux/macOS:
 bash ./offline/build-bundle.sh
 ```
 
+Offline scripts are designed for Ubuntu 22.04 (jammy) amd64.
+
 This produces:
 - `offline/hush-offline-bundle.tar` (all required Docker images)
 - `offline/pkgs/docker/*.deb` (latest Docker engine packages from Docker Jammy repo)
@@ -159,7 +163,14 @@ bash ./offline/install-system-deps.sh
 bash ./offline/deploy-offline.sh
 ```
 
-`install-system-deps.sh` installs Docker Engine + Compose plugin + Python3/PIP/venv from local `.deb` files only (no network).
+Optional secret rotation during offline redeploy:
+```bash
+bash ./offline/deploy-offline.sh --rotate-secrets
+```
+
+By default, `offline/deploy-offline.sh` reuses existing `.env` to preserve vault access.
+
+`install-system-deps.sh` installs Docker Engine + Compose plugin + Python3/PIP/venv from local `.deb` files only (no network), and checksum verification is mandatory before install.
 
 ## Operations
 
