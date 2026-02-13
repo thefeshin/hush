@@ -38,27 +38,6 @@ async def _init_schema(conn: asyncpg.Connection):
     """)
 
     await conn.execute("""
-        CREATE TABLE IF NOT EXISTS messages (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-            sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            ciphertext BYTEA NOT NULL,
-            iv BYTEA NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    await conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
-            ON messages(conversation_id)
-    """)
-
-    await conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_messages_created_at
-            ON messages(conversation_id, created_at)
-    """)
-
-    await conn.execute("""
         CREATE TABLE IF NOT EXISTS blocked_ips (
             ip_address INET PRIMARY KEY,
             blocked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -132,6 +111,27 @@ async def _init_schema(conn: asyncpg.Connection):
     await conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_conversation_participants_user
             ON conversation_participants(user_id)
+    """)
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            ciphertext BYTEA NOT NULL,
+            iv BYTEA NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
+            ON messages(conversation_id)
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_messages_created_at
+            ON messages(conversation_id, created_at)
     """)
 
 
