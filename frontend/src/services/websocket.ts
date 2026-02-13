@@ -7,7 +7,7 @@ import type { EncryptedData } from '../types/crypto';
 
 // Message types from server
 interface ServerMessage {
-  type: 'subscribed' | 'unsubscribed' | 'message' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed';
+  type: 'subscribed' | 'unsubscribed' | 'message' | 'message_sent' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed';
   conversation_id?: string;
   sender_id?: string;  // Sender's user ID (plaintext, for auto-discovery)
   id?: string;
@@ -15,6 +15,8 @@ interface ServerMessage {
   iv?: string;
   created_at?: string;
   message?: string;
+  code?: string;
+  client_message_id?: string;
   conversation_count?: number;
 }
 
@@ -33,6 +35,7 @@ interface ClientMessage {
   type: 'message';
   conversation_id: string;
   recipient_id?: string;
+  client_message_id: string;
   ciphertext: string;
   iv: string;
 }
@@ -216,6 +219,7 @@ export class WebSocketService {
           type: 'message',
           conversation_id: conversationId,
           recipient_id: recipientId,
+          client_message_id: tempId,
           ciphertext: encrypted.ciphertext,
           iv: encrypted.iv
         });
@@ -308,12 +312,29 @@ export class WebSocketService {
           this.handleIncomingMessage(msg);
           break;
 
+        case 'message_sent':
+          if (msg.client_message_id && msg.id) {
+            const pending = this.pendingMessages.get(msg.client_message_id);
+            if (pending) {
+              this.pendingMessages.delete(msg.client_message_id);
+              pending.resolve({ id: msg.id });
+            }
+          }
+          break;
+
         case 'heartbeat':
         case 'pong':
           this.lastPong = Date.now();
           break;
 
         case 'error':
+          if (msg.client_message_id) {
+            const pending = this.pendingMessages.get(msg.client_message_id);
+            if (pending) {
+              this.pendingMessages.delete(msg.client_message_id);
+              pending.reject(new Error(msg.message || msg.code || 'Message send failed'));
+            }
+          }
           console.error('WebSocket error:', msg.message);
           break;
       }
@@ -330,6 +351,15 @@ export class WebSocketService {
     // Resolve any pending send for this conversation
     // Note: The server echoes our own messages back
     if (msg.id && msg.conversation_id) {
+      if (msg.client_message_id) {
+        const pending = this.pendingMessages.get(msg.client_message_id);
+        if (pending) {
+          this.pendingMessages.delete(msg.client_message_id);
+          pending.resolve({ id: msg.id });
+          return;
+        }
+      }
+
       if (msg.ciphertext && msg.iv) {
         for (const [tempId, pending] of this.pendingMessages) {
           if (

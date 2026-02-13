@@ -66,14 +66,20 @@ export function MessageComposer({ conversationId, participantId }: Props) {
       const encrypted = await encryptMessage(conversationKey, payloadString);
 
       if (isConnected) {
-        // Send via WebSocket
-        const result = await sendMessage(conversationId, encrypted, participantId);
+        try {
+          const result = await sendMessage(conversationId, encrypted, participantId);
 
-        // Save to local storage
-        await saveMessage(result.id, conversationId, encrypted, payload.timestamp);
+          // Save to local storage
+          await saveMessage(result.id, conversationId, encrypted, payload.timestamp);
 
-        // Update message with real ID
-        markMessageSent(tempId, result.id);
+          // Update message with real ID
+          markMessageSent(tempId, result.id);
+        } catch {
+          // Silent fallback: queue for retry and keep optimistic UX.
+          await queueMessage(conversationId, tempId, encrypted, participantId);
+          await saveMessage(tempId, conversationId, encrypted, payload.timestamp);
+          markMessageSent(tempId, tempId);
+        }
       } else {
         // Queue for later when offline
         await queueMessage(conversationId, tempId, encrypted, participantId);
