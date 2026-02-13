@@ -9,6 +9,8 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 PYTHON_CMD=""
 BUNDLE_PATH=""
+ROTATE_SECRETS=false
+WORD_ARRAY=()
 
 print_header() {
     echo ""
@@ -55,7 +57,7 @@ pick_bundle_path() {
 preflight_runtime() {
     local runtime_ok=true
 
-    echo "[1/6] Checking system runtime prerequisites..."
+    echo "[1/7] Checking system runtime prerequisites..."
 
     if ! command -v docker >/dev/null 2>&1; then
         echo "  [MISSING] docker"
@@ -91,7 +93,7 @@ verify_bundle() {
     local size_mb
 
     echo ""
-    echo "[2/6] Checking Docker image bundle..."
+    echo "[2/7] Checking Docker image bundle..."
     pick_bundle_path
 
     if [[ ! -f "$BUNDLE_PATH" ]]; then
@@ -111,7 +113,7 @@ verify_bundle() {
 
 verify_required_files() {
     echo ""
-    echo "[3/6] Verifying required files..."
+    echo "[3/7] Verifying required files..."
 
     local missing=()
     local path
@@ -119,6 +121,7 @@ verify_required_files() {
         "docker-compose.yml"
         "nginx/nginx.conf"
         "offline/generate_secrets.py"
+        "offline/SHA256SUMS"
     )
 
     for path in "${required[@]}"; do
@@ -135,6 +138,18 @@ verify_required_files() {
     fi
 }
 
+verify_integrity() {
+    echo ""
+    echo "[4/7] Verifying artifact checksums..."
+
+    (
+        cd "$PROJECT_ROOT"
+        sha256sum -c "offline/SHA256SUMS"
+    )
+
+    echo "[OK] All artifact checksums verified"
+}
+
 ensure_ssl() {
     local ssl_dir cert_path key_path
     ssl_dir="$PROJECT_ROOT/nginx/ssl"
@@ -142,7 +157,7 @@ ensure_ssl() {
     key_path="$ssl_dir/key.pem"
 
     echo ""
-    echo "[4/6] Ensuring SSL certificates..."
+    echo "[5/7] Ensuring SSL certificates..."
 
     mkdir -p "$ssl_dir"
     if [[ -f "$cert_path" && -f "$key_path" ]]; then
@@ -164,10 +179,15 @@ generate_env_and_words() {
     local words_output
 
     echo ""
-    echo "[5/6] Generating deployment secrets..."
+    echo "[6/7] Preparing deployment secrets..."
+
+    if [[ -f "$PROJECT_ROOT/.env" && "$ROTATE_SECRETS" != true ]]; then
+        echo "[OK] Reusing existing .env"
+        return
+    fi
 
     if [[ -f "$PROJECT_ROOT/.env" ]]; then
-        echo "  [WARN] .env already exists, backing up to .env.backup"
+        echo "  [WARN] Rotating secrets, backing up existing .env to .env.backup"
         cp "$PROJECT_ROOT/.env" "$PROJECT_ROOT/.env.backup"
     fi
 
@@ -181,7 +201,7 @@ load_images_and_start() {
     local svc status
 
     echo ""
-    echo "[6/6] Loading Docker images and starting services..."
+    echo "[7/7] Loading Docker images and starting services..."
 
     docker load -i "$BUNDLE_PATH"
     echo "[OK] Images loaded"
@@ -202,25 +222,27 @@ load_images_and_start() {
         fi
     done
 
-    echo ""
-    echo "================================================================"
-    echo "         YOUR 12-WORD VAULT PASSPHRASE"
-    echo "================================================================"
-    echo ""
+    if [[ ${#WORD_ARRAY[@]} -eq 12 ]]; then
+        echo ""
+        echo "================================================================"
+        echo "         YOUR 12-WORD VAULT PASSPHRASE"
+        echo "================================================================"
+        echo ""
 
-    for ((i=0; i<12; i+=3)); do
-        printf "   %2d. %-12s  %2d. %-12s  %2d. %-12s\n" \
-            $((i+1)) "${WORD_ARRAY[$i]}" \
-            $((i+2)) "${WORD_ARRAY[$((i+1))]}" \
-            $((i+3)) "${WORD_ARRAY[$((i+2))]}"
-    done
+        for ((i=0; i<12; i+=3)); do
+            printf "   %2d. %-12s  %2d. %-12s  %2d. %-12s\n" \
+                $((i+1)) "${WORD_ARRAY[$i]}" \
+                $((i+2)) "${WORD_ARRAY[$((i+1))]}" \
+                $((i+3)) "${WORD_ARRAY[$((i+2))]}"
+        done
 
-    echo ""
-    echo "================================================================"
-    echo "  WRITE THESE DOWN NOW. THEY WILL NOT BE SHOWN AGAIN."
-    echo "  Without these words, your vault data is UNRECOVERABLE."
-    echo "================================================================"
-    echo ""
+        echo ""
+        echo "================================================================"
+        echo "  WRITE THESE DOWN NOW. THEY WILL NOT BE SHOWN AGAIN."
+        echo "  Without these words, your vault data is UNRECOVERABLE."
+        echo "================================================================"
+        echo ""
+    fi
 
     if [[ "$healthy" == true ]]; then
         echo "============================================"
@@ -244,11 +266,19 @@ load_images_and_start() {
 }
 
 main() {
+    if [[ "${1:-}" == "--rotate-secrets" ]]; then
+        ROTATE_SECRETS=true
+        echo "[WARN] --rotate-secrets enabled: existing vault access words will change"
+    elif [[ -n "${1:-}" ]]; then
+        fail "Unknown argument: $1 (supported: --rotate-secrets)"
+    fi
+
     print_header
     cd "$PROJECT_ROOT"
     preflight_runtime
     verify_bundle
     verify_required_files
+    verify_integrity
     ensure_ssl
     generate_env_and_words
     load_images_and_start

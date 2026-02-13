@@ -59,6 +59,8 @@ DATABASE_URL={database_url}
 # Application
 BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8000
+TRUST_PROXY_HEADERS=true
+TRUSTED_PROXY_CIDRS_RAW=127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 """
 
         with open(self.env_path, 'w') as f:

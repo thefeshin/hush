@@ -62,16 +62,13 @@ verify_package_dir() {
     [[ "${#DEB_FILES[@]}" -gt 0 ]] || fail "No .deb files found in $PKGS_ALL_DIR"
 }
 
-verify_checksums_if_available() {
-    if [[ ! -f "$CHECKSUM_FILE" ]]; then
-        echo "[WARN] $CHECKSUM_FILE not found; skipping checksum verification"
-        return
-    fi
+verify_checksums() {
+    [[ -f "$CHECKSUM_FILE" ]] || fail "Missing checksum file: $CHECKSUM_FILE"
 
     echo "[1/5] Verifying checksums..."
     (
         cd "$PROJECT_ROOT"
-        sha256sum -c "offline/SHA256SUMS" --ignore-missing
+        sha256sum -c "offline/SHA256SUMS"
     )
     echo "[OK] Checksums verified"
 }
@@ -165,7 +162,7 @@ main() {
     ensure_sudo
     ensure_jammy_amd64
     verify_package_dir
-    verify_checksums_if_available
+    verify_checksums
     install_local_debs
     verify_runtime
     start_docker_service

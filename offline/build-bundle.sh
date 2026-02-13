@@ -313,6 +313,14 @@ generate_integrity_files() {
         {
             sha256sum "offline/hush-offline-bundle.tar"
             find "offline/pkgs" -type f -name "*.deb" -print | sort | xargs -r sha256sum
+            sha256sum "docker-compose.yml"
+            sha256sum "nginx/nginx.conf"
+            sha256sum "offline/install-system-deps.sh"
+            sha256sum "offline/deploy-offline.sh"
+            sha256sum "offline/generate_secrets.py"
+            sha256sum "offline/bundle-manifest.txt"
+            find "offline/manifests" -type f -name "*.txt" -print | sort | xargs -r sha256sum
+            sha256sum ".env"
         } > "$SHA_FILE"
     )
 }

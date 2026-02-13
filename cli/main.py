@@ -9,6 +9,19 @@ import shutil
 import platform
 
 
+def get_compose_command():
+    """Return available compose command."""
+    if shutil.which('docker'):
+        result = subprocess.run(['docker', 'compose', 'version'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return ['docker', 'compose']
+
+    if shutil.which('docker-compose'):
+        return ['docker-compose']
+
+    return None
+
+
 def get_platform():
     """Detect current platform"""
     system = platform.system().lower()
@@ -202,10 +215,16 @@ def main():
     print("[HUSH] Writing configuration...\n")
     config_manager.write_env(security_config, secrets)
 
+    compose_cmd = get_compose_command()
+    if not compose_cmd:
+        print("[HUSH] ERROR: Neither 'docker compose' nor 'docker-compose' is available")
+        config_manager.delete_env()
+        sys.exit(1)
+
     # Step 4: Build containers (BEFORE showing secrets)
     print("[HUSH] Building containers...\n")
     build_result = subprocess.run(
-        ['docker-compose', 'build'],
+        [*compose_cmd, 'build'],
         capture_output=False
     )
     if build_result.returncode != 0:
@@ -218,7 +237,7 @@ def main():
     # Step 5: Start services
     print("\n[HUSH] Starting services...\n")
     run_result = subprocess.run(
-        ['docker-compose', 'up', '-d'],
+        [*compose_cmd, 'up', '-d'],
         capture_output=False
     )
     if run_result.returncode != 0:
@@ -241,6 +260,11 @@ def handle_existing_deployment(config_manager, ConfigManager):
     """Handle case where .env already exists"""
     print("[HUSH] Existing deployment detected.\n")
 
+    compose_cmd = get_compose_command()
+    if not compose_cmd:
+        print("[HUSH] ERROR: Neither 'docker compose' nor 'docker-compose' is available")
+        return False
+
     persist_vault = config_manager.get_persist_vault()
 
     if persist_vault:
@@ -248,9 +272,9 @@ def handle_existing_deployment(config_manager, ConfigManager):
         confirm = input("[HUSH] Continue with existing secrets? [y/N]: ").strip().lower()
         if confirm == 'y':
             # Just rebuild and restart
-            subprocess.run(['docker-compose', 'down'])
-            subprocess.run(['docker-compose', 'build'])
-            subprocess.run(['docker-compose', 'up', '-d'])
+            subprocess.run([*compose_cmd, 'down'])
+            subprocess.run([*compose_cmd, 'build'])
+            subprocess.run([*compose_cmd, 'up', '-d'])
             print("\n[HUSH] Redeployment complete!")
             return False
         else:
@@ -264,7 +288,7 @@ def handle_existing_deployment(config_manager, ConfigManager):
             print("[HUSH] Aborting.")
             return False
         # Continue with fresh deployment
-        subprocess.run(['docker-compose', 'down', '-v'])
+        subprocess.run([*compose_cmd, 'down', '-v'])
         return True
 
 
@@ -300,3 +324,7 @@ def print_secrets(secrets, config):
     print("  WRITE THESE WORDS DOWN. THEY WILL NOT BE SHOWN AGAIN.")
     print("  LOSING THEM MEANS PERMANENT DATA LOSS.")
     print("=" * 60 + "\n")
+    compose_cmd = get_compose_command()
+    if not compose_cmd:
+        print("[HUSH] ERROR: Neither 'docker compose' nor 'docker-compose' is available")
+        return False
