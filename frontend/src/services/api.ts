@@ -181,7 +181,7 @@ export async function getSalt(): Promise<string> {
 /**
  * Discover all conversations for the authenticated user
  */
-export async function discoverConversations(): Promise<string[]> {
+export async function discoverConversations(): Promise<Array<{ conversation_id: string; other_user_id: string; other_username: string }>> {
   const response = await fetch(`${API_BASE}/conversations/discover`, {
     credentials: 'include'
   });
@@ -194,7 +194,21 @@ export async function discoverConversations(): Promise<string[]> {
   }
 
   const data = await response.json();
-  return data.conversation_ids;
+
+  if (Array.isArray(data.conversations)) {
+    return data.conversations;
+  }
+
+  // Backward compatibility with old backend payload shape.
+  if (Array.isArray(data.conversation_ids)) {
+    return data.conversation_ids.map((conversationId: string) => ({
+      conversation_id: conversationId,
+      other_user_id: '',
+      other_username: ''
+    }));
+  }
+
+  return [];
 }
 
 /**

@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useCrypto } from '../crypto/CryptoContext';
+import { getSyncService } from '../services/sync';
 import { useConversationSubscription } from '../hooks/useConversationSubscription';
 import { MessageList } from './MessageList';
 import { MessageComposer } from './MessageComposer';
@@ -35,7 +36,10 @@ export function ConversationView({ conversationId }: Props) {
   }, [conversationId, user, conversation]);
 
   const loadConversationMessages = async () => {
-    if (!user || !conversation) return;
+    if (!user || !conversation || !conversation.participantId) return;
+
+    const syncService = getSyncService();
+    await syncService.syncConversation(conversationId, null);
 
     const conversationKey = await getConversationKey(user.id, conversation.participantId);
 
@@ -56,7 +60,6 @@ export function ConversationView({ conversationId }: Props) {
         </div>
         <div className="conversation-title">
           <h2>{conversation.participantUsername}</h2>
-          <span className="conversation-uuid">{conversation.participantId.slice(0, 8)}...</span>
         </div>
       </div>
 

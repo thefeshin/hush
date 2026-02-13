@@ -21,7 +21,7 @@ export function Chat({ onNavigate }: ChatProps) {
   const user = useAuthStore(state => state.user);
   const { contacts, loadAllContacts } = useContactStore();
   const { activeConversationId, loadAllConversations, discoverConversations } = useConversationStore();
-  const { decryptContacts, getConversationId, decryptIdentity } = useCrypto();
+  const { decryptContacts, decryptIdentity } = useCrypto();
   const [hasDiscovered, setHasDiscovered] = useState(false);
 
   // Default no-op handler if onNavigate not provided
@@ -36,15 +36,14 @@ export function Chat({ onNavigate }: ChatProps) {
 
   // Load conversations after contacts are loaded
   useEffect(() => {
-    if (user && contacts.length > 0) {
+    if (user) {
       loadAllConversations(
         user.id,
         contacts,
-        getConversationId,
         decryptIdentity
       );
     }
-  }, [user, contacts.length]);
+  }, [user, contacts.length, loadAllConversations, decryptIdentity]);
 
   // Discover conversations from server and subscribe via WebSocket
   useEffect(() => {
@@ -53,7 +52,7 @@ export function Chat({ onNavigate }: ChatProps) {
     const initializeDiscovery = async () => {
       try {
         // Discover all conversations for this user (including unknown contacts).
-        await discoverConversations(user.id, decryptIdentity);
+        await discoverConversations();
         setHasDiscovered(true);
       } catch (err) {
         console.error('Failed to initialize conversation discovery', err);
@@ -61,7 +60,7 @@ export function Chat({ onNavigate }: ChatProps) {
     };
 
     initializeDiscovery();
-  }, [user, hasDiscovered]);
+  }, [user, hasDiscovered, discoverConversations]);
 
   if (!user) {
     return <div className="loading-screen"><div className="spinner" /></div>;

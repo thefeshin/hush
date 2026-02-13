@@ -10,9 +10,9 @@ import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
-import { replaceMessageId, saveMessage } from '../services/storage';
+import { replaceMessageId, saveConversation, saveMessage } from '../services/storage';
 import { processQueue } from '../services/messageQueue';
-import type { EncryptedData, MessagePayload } from '../types/crypto';
+import type { ConversationMetadata, EncryptedData, MessagePayload } from '../types/crypto';
 
 interface RealtimeContextValue {
   connectionState: ConnectionState;
@@ -31,8 +31,8 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
   const { isAuthenticated, user } = useAuthStore();
   const { addMessage, markMessageSent } = useMessageStore();
-  const { updateLastMessage, incrementUnread, getConversation, addConversation } = useConversationStore();
-  const { isUnlocked, getConversationKey, decryptMessage } = useCrypto();
+  const { updateLastMessage, incrementUnread, getConversation, upsertConversation } = useConversationStore();
+  const { isUnlocked, getConversationKey, decryptMessage, encryptIdentity } = useCrypto();
 
   // Connection lifecycle is owned here.
   useEffect(() => {
@@ -80,13 +80,25 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         const plaintext = await decryptMessage(conversationKey, encrypted);
         const payload: MessagePayload = JSON.parse(plaintext);
         const timestamp = createdAt ? new Date(createdAt).getTime() : payload.timestamp;
+        const participantUsername = payload.sender_name || senderId;
 
-        addConversation({
+        const metadata: ConversationMetadata = {
+          participants: [user.id, senderId].sort() as [string, string],
+          created_by: {
+            user_id: payload.sender_id,
+            display_name: payload.sender_name
+          },
+          created_at: payload.timestamp
+        };
+        const encryptedMetadata = await encryptIdentity(metadata);
+        await saveConversation(conversationId, encryptedMetadata, timestamp);
+
+        upsertConversation({
           conversationId,
           participantId: senderId,
-          participantUsername: payload.sender_name || 'Unknown',
+          participantUsername,
           createdAt: Date.now(),
-          lastMessageAt: payload.timestamp,
+          lastMessageAt: timestamp,
           unreadCount: 1
         });
 
@@ -115,6 +127,14 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       const timestamp = createdAt ? new Date(createdAt).getTime() : payload.timestamp;
       await saveMessage(id, conversationId, encrypted, timestamp);
 
+      if (payload.sender_id !== user.id && payload.sender_name) {
+        upsertConversation({
+          ...existingConversation,
+          participantUsername: payload.sender_name,
+          lastMessageAt: timestamp
+        });
+      }
+
       addMessage({
         id,
         conversationId,
@@ -137,7 +157,8 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     getConversation,
     getConversationKey,
     decryptMessage,
-    addConversation,
+    encryptIdentity,
+    upsertConversation,
     addMessage,
     updateLastMessage,
     incrementUnread

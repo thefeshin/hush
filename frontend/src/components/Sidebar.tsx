@@ -81,7 +81,6 @@ export function Sidebar({ onNavigate }: SidebarProps) {
             </div>
             <div className="profile-details">
               <span className="profile-username">{user.username}</span>
-              <span className="profile-id">{user.id.slice(0, 8)}...</span>
             </div>
             <button
               onClick={() => onNavigate('settings')}
@@ -129,7 +128,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                   </div>
                   <div className="conversation-info">
                     <div className="conversation-name">
-                      {conversation.participantUsername === 'Unknown' ? 'Unknown Contact' : conversation.participantUsername}
+                      {conversation.participantUsername}
                     </div>
                     <div className="conversation-time">{formatTime(conversation.lastMessageAt)}</div>
                   </div>
@@ -206,7 +205,6 @@ function ContactItem({
       </div>
       <div className="contact-info">
         <div className="contact-name">{contact.username}</div>
-        <div className="contact-uuid">{contact.id.slice(0, 8)}...</div>
       </div>
       <button
         className="start-chat-button"
