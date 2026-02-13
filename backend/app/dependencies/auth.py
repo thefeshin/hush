@@ -50,7 +50,7 @@ async def get_current_user(request: Request) -> AuthenticatedUser:
 
         return AuthenticatedUser(user_id=user_id, username=username)
 
-    except JWTError:
+    except (JWTError, KeyError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_token", "message": "Invalid or expired token"}
@@ -77,7 +77,7 @@ async def verify_websocket_token(token: str) -> Optional[AuthenticatedUser]:
 
         return AuthenticatedUser(user_id=user_id, username=username)
 
-    except JWTError:
+    except (JWTError, KeyError, ValueError, TypeError):
         return None
 
 

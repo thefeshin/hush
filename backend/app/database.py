@@ -28,6 +28,8 @@ async def init_db():
 
 async def _init_schema(conn: asyncpg.Connection):
     """Create tables if they don't exist"""
+    await conn.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS threads (
             id UUID PRIMARY KEY,
@@ -110,6 +112,11 @@ async def _init_schema(conn: asyncpg.Connection):
 
     await conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash
+            ON refresh_tokens(token_hash)
+    """)
+
+    await conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash_unique
             ON refresh_tokens(token_hash)
     """)
 

@@ -67,7 +67,7 @@ async def create_message(
 async def get_messages(
     thread_id: UUID,
     after: Optional[datetime] = Query(None, description="Get messages after this timestamp"),
-    limit: int = Query(50, le=200, description="Maximum messages to return"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum messages to return"),
     conn=Depends(get_connection),
     user: AuthenticatedUser = Depends(get_current_user)
 ):

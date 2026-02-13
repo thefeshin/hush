@@ -22,5 +22,5 @@ async def test_query_threads_scopes_lookup_to_authenticated_participant():
     )
 
     fetch_args = conn.fetch.call_args.args
-    assert fetch_args[0] == [thread_id]
-    assert fetch_args[1] == user.user_id
+    assert fetch_args[1] == [thread_id]
+    assert fetch_args[2] == user.user_id

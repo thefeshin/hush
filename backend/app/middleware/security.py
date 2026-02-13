@@ -8,10 +8,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from datetime import datetime, timezone
 
-from app.config import settings
 from app.database import get_pool
 from app.middleware.rate_limit import rate_limiter
-from app.logging_config import log_rate_limited, log_panic_mode
+from app.logging_config import log_rate_limited
+from app.utils.network import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +34,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             return self._add_security_headers(response)
 
-        client_ip = self._get_client_ip(request)
-
-        # Check panic mode for auth endpoint
-        if settings.PANIC_MODE and request.url.path == "/api/auth" and request.method == "POST":
-            log_panic_mode()
-            # Let the auth router handle panic mode for proper DB wipe
-            pass
+        client_ip = get_client_ip(request)
 
         # General rate limiting (separate from auth rate limiting)
         if not rate_limiter.is_allowed(client_ip):
@@ -74,15 +68,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
         return self._add_security_headers(response)
-
-    def _get_client_ip(self, request: Request) -> str:
-        """Extract client IP from request"""
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        if request.client:
-            return request.client.host
-        return "unknown"
 
     async def _check_ip_blocked(self, conn, ip: str) -> bool:
         """Check if IP is blocked"""

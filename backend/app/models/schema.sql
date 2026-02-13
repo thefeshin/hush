@@ -1,6 +1,8 @@
 -- HUSH Database Schema
 -- Zero-knowledge: server cannot read any content
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Threads table
 -- Stores encrypted thread metadata (participants, title, etc.)
 CREATE TABLE IF NOT EXISTS threads (
@@ -71,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 -- Indexes for refresh tokens
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash_unique ON refresh_tokens(token_hash);
 
 -- Thread participants table
 -- Stores plaintext participant UUIDs for thread discovery

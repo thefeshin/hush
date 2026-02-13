@@ -6,7 +6,6 @@ Validates 12-word passphrase, manages user registration/login with cookies
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -24,21 +23,12 @@ from app.services.defense import DefenseService
 from app.utils.crypto import constant_time_compare, hash_words
 from app.logging_config import log_auth_success
 from app.middleware.rate_limit import auth_rate_limiter, log_rate_limited
+from app.utils.network import get_client_ip
 
 router = APIRouter()
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def get_client_ip(request: Request) -> str:
-    """Extract client IP address, handles X-Forwarded-For from nginx"""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "unknown"
 
 
 def create_vault_token() -> tuple[str, int]:
@@ -395,62 +385,45 @@ async def refresh_tokens(
     token_hash = hash_refresh_token(refresh_token)
 
     # Find token in DB
-    token_record = await conn.fetchrow(
-        """
-        SELECT rt.id, rt.user_id, rt.expires_at, rt.revoked, u.username
-        FROM refresh_tokens rt
-        JOIN users u ON u.id = rt.user_id
-        WHERE rt.token_hash = $1
-        """,
-        token_hash
-    )
-
-    if not token_record:
-        clear_auth_cookies(response)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_token", "message": "Invalid refresh token"}
+    async with conn.transaction():
+        token_record = await conn.fetchrow(
+            """
+            UPDATE refresh_tokens rt
+            SET revoked = TRUE
+            FROM users u
+            WHERE rt.token_hash = $1
+              AND rt.user_id = u.id
+              AND rt.revoked = FALSE
+              AND rt.expires_at > NOW()
+            RETURNING rt.user_id, u.username
+            """,
+            token_hash,
         )
 
-    if token_record["revoked"]:
-        clear_auth_cookies(response)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "revoked_token", "message": "Token has been revoked"}
+        if not token_record:
+            clear_auth_cookies(response)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "invalid_token", "message": "Invalid refresh token"},
+            )
+
+        user_id = token_record["user_id"]
+        username = token_record["username"]
+
+        access_token, access_expires = create_access_token(user_id, username)
+        new_refresh_token = create_refresh_token()
+        new_refresh_hash = hash_refresh_token(new_refresh_token)
+
+        refresh_expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        await conn.execute(
+            """
+            INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+            VALUES ($1, $2, $3)
+            """,
+            user_id,
+            new_refresh_hash,
+            refresh_expires_at,
         )
-
-    if token_record["expires_at"] < datetime.now(timezone.utc):
-        clear_auth_cookies(response)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "expired_token", "message": "Refresh token expired"}
-        )
-
-    user_id = token_record["user_id"]
-    username = token_record["username"]
-
-    # Revoke old token (single-use)
-    await conn.execute(
-        "UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1",
-        token_record["id"]
-    )
-
-    # Create new tokens
-    access_token, access_expires = create_access_token(user_id, username)
-    new_refresh_token = create_refresh_token()
-    new_refresh_hash = hash_refresh_token(new_refresh_token)
-
-    # Store new refresh token
-    refresh_expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    await conn.execute(
-        """
-        INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-        VALUES ($1, $2, $3)
-        """,
-        user_id,
-        new_refresh_hash,
-        refresh_expires_at
-    )
 
     # Set new cookies
     set_auth_cookies(response, access_token, new_refresh_token, access_expires)
@@ -518,7 +491,7 @@ async def get_current_user(
 
         return UserResponse(id=user_id, username=username)
 
-    except JWTError:
+    except (JWTError, KeyError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_token", "message": "Invalid or expired token"}
@@ -550,7 +523,7 @@ async def lookup_user(
         )
         if payload.get("type") != "access":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    except JWTError:
+    except (JWTError, KeyError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_token", "message": "Invalid or expired token"}

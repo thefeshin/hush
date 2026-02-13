@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     FRONTEND_URL: str = "https://localhost"
+    TRUST_PROXY_HEADERS: bool = True
+    TRUSTED_PROXY_CIDRS_RAW: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+    @property
+    def trusted_proxy_cidrs(self) -> list[str]:
+        raw = self.TRUSTED_PROXY_CIDRS_RAW
+        if not raw:
+            return []
+        return [item.strip() for item in str(raw).split(",") if item.strip()]
 
     class Config:
         env_file = _find_env_file()

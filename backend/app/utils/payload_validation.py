@@ -3,6 +3,7 @@ Validation helpers for base64-encoded encrypted payload fields.
 """
 
 import base64
+from typing import Optional
 
 from fastapi import HTTPException, status
 
@@ -14,7 +15,7 @@ def decode_base64_field(
     *,
     field_name: str,
     max_bytes: int,
-    exact_bytes: int | None = None,
+    exact_bytes: Optional[int] = None,
 ) -> bytes:
     """
     Decode and validate a base64 field with size caps.
