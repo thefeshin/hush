@@ -8,6 +8,31 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 ROTATE_SECRETS=false
 
+prompt_env_choice() {
+  echo "[2/3] .env already exists on this machine."
+  echo "       Choose how to proceed:"
+  echo "       1) Use existing .env"
+  echo "       2) Create new .env (rotate secrets)"
+  echo "       3) Abort"
+  read -r -p "       Select [1-3]: " choice
+
+  case "$choice" in
+    1)
+      echo "[2/3] Using existing .env"
+      ;;
+    2)
+      echo "[2/3] Rotating .env on air-gapped machine..."
+      bash ./offline/init-airgap-env.sh --rotate-secrets
+      ;;
+    3)
+      fail "Aborted by user"
+      ;;
+    *)
+      fail "Invalid selection: $choice"
+      ;;
+  esac
+}
+
 fail() {
   echo "[ERROR] $*" >&2
   exit 1
@@ -56,7 +81,7 @@ main() {
     echo "[2/3] .env not found; generating .env on air-gapped machine..."
     bash ./offline/init-airgap-env.sh
   else
-    echo "[2/3] .env already present; keeping existing secrets"
+    prompt_env_choice
   fi
 
   echo ""

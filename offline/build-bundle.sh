@@ -358,8 +358,8 @@ image_count=$(wc -l < "$target_dir/manifests/images.txt" | tr -d ' ')
 docker_package_count=$(wc -l < "$target_dir/manifests/docker-packages.txt" | tr -d ' ')
 python_package_count=$(wc -l < "$target_dir/manifests/python-packages.txt" | tr -d ' ')
 all_package_count=$(wc -l < "$target_dir/manifests/all-packages.txt" | tr -d ' ')
-env_policy=DO_NOT_TRANSFER_ENV
-env_generation=RUN_INIT_AIRGAP_ENV_ON_TARGET
+env_policy=OPTIONAL_TRANSFER_OR_LOCAL_GENERATION
+env_generation=PROMPTED_DURING_DEPLOY_AIRGAPPED
 EOF
 
   cat > "$target_dir/TRANSFER-CHECKLIST.txt" <<EOF
@@ -367,12 +367,19 @@ HUSH offline transfer checklist for ${target_id}
 
 1) Copy the full project directory to the air-gapped machine.
 2) Ensure this bundle exists at: offline/bundles/${target_id}
-3) DO NOT transfer .env from the online machine.
+3) Optional: copy .env if you want to reuse existing secrets.
 4) On the air-gapped machine run:
    bash ./offline/deploy-airgapped.sh
 
-If .env is missing, generate it locally on the air-gapped machine:
-   bash ./offline/init-airgap-env.sh
+The deploy script will prompt you to either:
+  - use existing .env
+  - or create a new .env locally
+
+Example SCP (copy full repository):
+  scp -r /path/to/hush user@AIRGAP_HOST:/opt/
+
+Example SCP (optional existing .env only):
+  scp /path/to/hush/.env user@AIRGAP_HOST:/opt/hush/
 EOF
 
   (
@@ -435,8 +442,14 @@ print_summary() {
     echo "  - offline/bundles/${codename}-${TARGET_ARCH}"
   done
   echo ""
-  echo "Important: .env is NOT bundled and must be generated on the air-gapped host."
-  echo "On the air-gapped machine run:"
+  echo "Important: .env is NOT bundled. You may transfer an existing .env if desired,"
+  echo "or create a new one on the air-gapped host during deployment."
+  echo ""
+  echo "SCP transfer examples:"
+  echo "  scp -r /path/to/hush user@AIRGAP_HOST:/opt/"
+  echo "  scp /path/to/hush/.env user@AIRGAP_HOST:/opt/hush/   # optional"
+  echo ""
+  echo "On the air-gapped machine:" 
   echo "  bash ./offline/deploy-airgapped.sh"
   echo ""
 }

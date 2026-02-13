@@ -187,14 +187,18 @@ load_images_and_start() {
   docker load -i "$BUNDLE_PATH"
   echo "[OK] Images loaded"
 
-  docker compose down >/dev/null 2>&1 || true
-  docker compose up -d
+  if [[ -f "$PROJECT_ROOT/docker-compose.override.yml" ]]; then
+    echo "[INFO] Ignoring docker-compose.override.yml for air-gapped deploy"
+  fi
+
+  docker compose -f docker-compose.yml down >/dev/null 2>&1 || true
+  docker compose -f docker-compose.yml up -d
 
   echo "  Waiting for services to initialize..."
   sleep 8
 
   for svc in postgres backend nginx; do
-    status="$(docker compose ps "$svc" --format "{{.Status}}" 2>/dev/null || echo "unknown")"
+    status="$(docker compose -f docker-compose.yml ps "$svc" --format "{{.Status}}" 2>/dev/null || echo "unknown")"
     if [[ "$status" =~ Up|running|healthy ]]; then
       echo "  [OK] $svc"
     else
@@ -218,10 +222,10 @@ load_images_and_start() {
   echo "Access your vault at: https://localhost"
   echo ""
   echo "Commands:"
-  echo "  View logs:     docker compose logs -f"
-  echo "  Stop:          docker compose down"
-  echo "  Restart:       docker compose restart"
-  echo "  Check status:  docker compose ps"
+  echo "  View logs:     docker compose -f docker-compose.yml logs -f"
+  echo "  Stop:          docker compose -f docker-compose.yml down"
+  echo "  Restart:       docker compose -f docker-compose.yml restart"
+  echo "  Check status:  docker compose -f docker-compose.yml ps"
   echo ""
 }
 

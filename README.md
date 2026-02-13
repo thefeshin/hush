@@ -67,7 +67,7 @@ The backend relays encrypted payloads and stores only metadata needed for routin
 - Python 3
 - Node.js + npm (for local frontend dev)
 - OpenSSL (for local cert generation)
-- For air-gapped bootstrap: Ubuntu 22.04 (jammy) amd64
+- For air-gapped bootstrap: Ubuntu 22.04 (jammy) amd64 or Ubuntu 24.04 (noble) amd64
 
 ## Online Deployment (Connected Host)
 
@@ -143,7 +143,16 @@ This produces:
 
 Copy:
 - the full project directory (including `offline/bundles/<target>-amd64/`)
-- do **not** copy `.env` from the online machine
+- optional: copy `.env` if you want to reuse existing vault secrets
+
+SCP examples:
+```bash
+# Copy full repository
+scp -r /path/to/hush user@AIRGAP_HOST:/opt/
+
+# Optional: copy existing .env for secret reuse
+scp /path/to/hush/.env user@AIRGAP_HOST:/opt/hush/
+```
 
 ### On air-gapped machine
 
@@ -152,7 +161,8 @@ Linux/macOS:
 bash ./offline/deploy-airgapped.sh
 ```
 
-The first deployment creates `.env` on the air-gapped machine and prints the 12 words.
+If `.env` already exists, deployment prompts you to use it or create a new one.
+If `.env` is missing, deployment creates it on the air-gapped machine and prints the 12 words.
 
 Manual equivalent steps:
 ```bash

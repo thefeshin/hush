@@ -71,7 +71,7 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - Python 3
 - Node.js و npm (برای توسعه محلی فرانت)
 - OpenSSL
-- برای bootstrap آفلاین: Ubuntu 22.04 (jammy) معماری amd64
+- برای bootstrap آفلاین: Ubuntu 22.04 (jammy) amd64 یا Ubuntu 24.04 (noble) amd64
 
 <a id="fa-online-deployment"></a>
 ## استقرار آنلاین (ماشین متصل به اینترنت)
@@ -155,7 +155,16 @@ bash ./offline/build-bundle.sh --target all
 
 فایل‌ها/پوشه‌های زیر را منتقل کنید:
 - کل پوشه پروژه (شامل `offline/bundles/<target>-amd64/`)
-- فایل `.env` را از ماشین آنلاین منتقل نکنید
+- در صورت نیاز می‌توانید `.env` را برای reuse شدن secretها منتقل کنید
+
+نمونه‌های SCP:
+```bash
+# انتقال کل مخزن
+scp -r /path/to/hush user@AIRGAP_HOST:/opt/
+
+# اختیاری: انتقال .env موجود برای reuse secretها
+scp /path/to/hush/.env user@AIRGAP_HOST:/opt/hush/
+```
 
 <a id="fa-offline-run"></a>
 ### اجرای استقرار روی ماشین آفلاین
@@ -165,7 +174,8 @@ Linux/macOS:
 bash ./offline/deploy-airgapped.sh
 ```
 
-در اولین اجرا، `.env` روی همان ماشین آفلاین ساخته می‌شود و ۱۲ کلمه نمایش داده می‌شود.
+اگر `.env` وجود داشته باشد، اسکریپت از شما می‌پرسد همان را استفاده کند یا `.env` جدید بسازد.
+اگر `.env` وجود نداشته باشد، روی همان ماشین آفلاین ساخته می‌شود و ۱۲ کلمه نمایش داده می‌شود.
 
 معادل دستی مراحل:
 ```bash
