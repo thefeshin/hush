@@ -140,50 +140,48 @@ npm run dev
 
 Linux/macOS:
 ```bash
-bash ./offline/build-bundle.sh
+bash ./offline/build-bundle.sh --target all
 ```
 
-اسکریپت‌های آفلاین برای Ubuntu 22.04 (jammy) معماری amd64 طراحی شده‌اند.
+تارگت‌های پشتیبانی‌شده: Ubuntu 22.04 (jammy) amd64 و Ubuntu 24.04 (noble) amd64.
 
 خروجی‌ها:
-- `offline/hush-offline-bundle.tar` (همه Docker imageهای موردنیاز)
-- `offline/pkgs/docker/*.deb` (جدیدترین پکیج‌های Docker از مخزن Jammy)
-- `offline/pkgs/python/*.deb` (وابستگی‌های python3/pip/venv)
-- `offline/pkgs/all/*.deb` (مجموع همه پکیج‌ها برای نصب آفلاین)
-- `offline/install-system-deps.sh`
-- `offline/manifests/*.txt`، `offline/bundle-manifest.txt`، `offline/SHA256SUMS`
-- `.env`
+- `offline/bundles/jammy-amd64/*` و/یا `offline/bundles/noble-amd64/*`
+- هر bundle شامل Docker image tar، تمام `.deb`های لازم، manifestها، checksumها و اسکریپت‌های deployment است
+- فایل `.env` عمدا داخل bundle قرار نمی‌گیرد
 
 <a id="fa-offline-transfer"></a>
 ### انتقال به ماشین آفلاین
 
 فایل‌ها/پوشه‌های زیر را منتقل کنید:
-- `offline/hush-offline-bundle.tar`
-- `offline/pkgs/`
-- `docker-compose.yml`
-- `nginx/`
-- `offline/install-system-deps.sh`
-- `offline/deploy-offline.sh`
-- `offline/manifests/`، `offline/bundle-manifest.txt`، `offline/SHA256SUMS`
-- `.env`
+- کل پوشه پروژه (شامل `offline/bundles/<target>-amd64/`)
+- فایل `.env` را از ماشین آنلاین منتقل نکنید
 
 <a id="fa-offline-run"></a>
 ### اجرای استقرار روی ماشین آفلاین
 
 Linux/macOS:
 ```bash
+bash ./offline/deploy-airgapped.sh
+```
+
+در اولین اجرا، `.env` روی همان ماشین آفلاین ساخته می‌شود و ۱۲ کلمه نمایش داده می‌شود.
+
+معادل دستی مراحل:
+```bash
 bash ./offline/install-system-deps.sh
+bash ./offline/init-airgap-env.sh
 bash ./offline/deploy-offline.sh
 ```
 
-برای چرخش اجباری secretها در redeploy آفلاین:
+برای چرخش secretها روی ماشین آفلاین:
 ```bash
-bash ./offline/deploy-offline.sh --rotate-secrets
+bash ./offline/deploy-airgapped.sh --rotate-secrets
 ```
 
-به‌صورت پیش‌فرض، `offline/deploy-offline.sh` فایل `.env` موجود را reuse می‌کند تا دسترسی به vault حفظ شود.
+اسکریپت `install-system-deps.sh`، Docker Engine + Compose plugin + Python3/PIP/venv را فقط از `.deb`های محلی نصب می‌کند (بدون شبکه) و بررسی checksum به‌صورت اجباری انجام می‌شود.
 
-اسکریپت `install-system-deps.sh`، Docker Engine + Compose plugin + Python3/PIP/venv را فقط از `.deb`های محلی نصب می‌کند (بدون شبکه) و قبل از نصب، صحت checksumها را به‌صورت اجباری بررسی می‌کند.
+فایل `.env` برای deployment اجباری است؛ اگر وجود نداشته باشد یا keyهای لازم را نداشته باشد، `deploy-offline.sh` با خطای واضح متوقف می‌شود و دستور بعدی را اعلام می‌کند.
 
 <a id="fa-operations"></a>
 ## عملیات روزمره

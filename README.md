@@ -129,48 +129,46 @@ Frontend runs at `http://localhost:3000` (configured in `frontend/vite.config.ts
 
 Linux/macOS:
 ```bash
-bash ./offline/build-bundle.sh
+bash ./offline/build-bundle.sh --target all
 ```
 
-Offline scripts are designed for Ubuntu 22.04 (jammy) amd64.
+Supported targets: Ubuntu 22.04 (jammy) amd64 and Ubuntu 24.04 (noble) amd64.
 
 This produces:
-- `offline/hush-offline-bundle.tar` (all required Docker images)
-- `offline/pkgs/docker/*.deb` (latest Docker engine packages from Docker Jammy repo)
-- `offline/pkgs/python/*.deb` (python3/pip/venv dependency closure)
-- `offline/pkgs/all/*.deb` (union package set for offline install)
-- `offline/install-system-deps.sh`
-- `offline/manifests/*.txt`, `offline/bundle-manifest.txt`, `offline/SHA256SUMS`
-- `.env`
+- `offline/bundles/jammy-amd64/*` and/or `offline/bundles/noble-amd64/*`
+- each bundle includes Docker image tar, all required `.deb` packages, manifests, checksums, and deployment scripts
+- `.env` is intentionally excluded from bundles
 
 ### Transfer to air-gapped machine
 
 Copy:
-- `offline/hush-offline-bundle.tar`
-- `offline/pkgs/`
-- `docker-compose.yml`
-- `nginx/`
-- `offline/install-system-deps.sh`
-- `offline/deploy-offline.sh`
-- `offline/manifests/`, `offline/bundle-manifest.txt`, `offline/SHA256SUMS`
-- `.env`
+- the full project directory (including `offline/bundles/<target>-amd64/`)
+- do **not** copy `.env` from the online machine
 
 ### On air-gapped machine
 
 Linux/macOS:
 ```bash
+bash ./offline/deploy-airgapped.sh
+```
+
+The first deployment creates `.env` on the air-gapped machine and prints the 12 words.
+
+Manual equivalent steps:
+```bash
 bash ./offline/install-system-deps.sh
+bash ./offline/init-airgap-env.sh
 bash ./offline/deploy-offline.sh
 ```
 
-Optional secret rotation during offline redeploy:
+Optional secret rotation on air-gapped machine:
 ```bash
-bash ./offline/deploy-offline.sh --rotate-secrets
+bash ./offline/deploy-airgapped.sh --rotate-secrets
 ```
 
-By default, `offline/deploy-offline.sh` reuses existing `.env` to preserve vault access.
+`install-system-deps.sh` installs Docker Engine + Compose plugin + Python3/PIP/venv from local `.deb` files only (no network), with mandatory checksum verification.
 
-`install-system-deps.sh` installs Docker Engine + Compose plugin + Python3/PIP/venv from local `.deb` files only (no network), and checksum verification is mandatory before install.
+`.env` is mandatory for deployment; `deploy-offline.sh` hard-fails if it is missing or missing required keys and tells you exactly which command to run next.
 
 ## Operations
 
