@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useContactStore, Contact } from '../stores/contactStore';
 import { useConversationStore } from '../stores/conversationStore';
@@ -13,11 +14,7 @@ import { clearQueue } from '../services/messageQueue';
 import { AddContactModal } from './AddContactModal';
 import { ConnectionStatus } from './ConnectionStatus';
 
-interface SidebarProps {
-  onNavigate: (page: 'chat' | 'settings') => void;
-}
-
-export function Sidebar({ onNavigate }: SidebarProps) {
+export function Sidebar() {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [activeTab, setActiveTab] = useState<'chats' | 'contacts'>('chats');
@@ -26,9 +23,12 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   const { logout } = useAuthStore();
   const { lockVault } = useCrypto();
   const { disconnect } = useWebSocket();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const { conversations, activeConversationId, setActiveConversation } = useConversationStore();
   const { contacts } = useContactStore();
+  const isInboxActive = location.pathname === '/conversation' || location.pathname === '/conversation/inbox';
 
   const handleLogout = async () => {
     disconnect();
@@ -80,10 +80,10 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               {user.username.charAt(0).toUpperCase()}
             </div>
             <div className="profile-details">
-              <span className="profile-username">{user.username}</span>
+                <span className="profile-username">{user.username}</span>
             </div>
             <button
-              onClick={() => onNavigate('settings')}
+              onClick={() => navigate('/settings')}
               className="settings-link"
               title="Settings"
             >
@@ -111,6 +111,20 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       <div className="sidebar-content">
         {activeTab === 'chats' && (
           <div className="conversation-list">
+            <div
+              className={`conversation-item ${isInboxActive ? 'active' : ''}`}
+              onClick={() => {
+                setActiveConversation(null);
+                navigate('/conversation');
+              }}
+            >
+              <div className="conversation-avatar">#</div>
+              <div className="conversation-info">
+                <div className="conversation-name">Inbox</div>
+                <div className="conversation-time">All conversations</div>
+              </div>
+            </div>
+
             {conversations.length === 0 ? (
               <div className="empty-list">
                 <p>No conversations yet</p>
@@ -121,7 +135,10 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 <div
                   key={conversation.conversationId}
                   className={`conversation-item ${conversation.conversationId === activeConversationId ? 'active' : ''}`}
-                  onClick={() => setActiveConversation(conversation.conversationId)}
+                  onClick={() => {
+                    setActiveConversation(conversation.conversationId);
+                    navigate(`/conversation/${encodeURIComponent(conversation.participantUsername)}`);
+                  }}
                 >
                   <div className="conversation-avatar">
                     {conversation.participantUsername[0].toUpperCase()}
@@ -185,6 +202,7 @@ function ContactItem({
 }) {
   const { getOrCreateConversation } = useConversationStore();
   const { getConversationId, encryptIdentity } = useCrypto();
+  const navigate = useNavigate();
 
   const handleStartChat = async () => {
     const conversation = await getOrCreateConversation(
@@ -195,7 +213,7 @@ function ContactItem({
       getConversationId,
       encryptIdentity
     );
-    void conversation;
+    navigate(`/conversation/${encodeURIComponent(conversation.participantUsername)}`);
   };
 
   return (

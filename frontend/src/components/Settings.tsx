@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { isPINEnabled } from '../services/deviceSettings';
@@ -16,10 +17,11 @@ type SettingsState = 'view' | 'enable-pin' | 'disable-pin' | 'change-pin' | 'cha
 type PINChangeStep = 'old' | 'new' | 'confirm';
 
 interface SettingsProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function Settings({ onBack }: SettingsProps) {
+  const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
   const { lockVault } = useCrypto();
   const [state, setState] = useState<SettingsState>('view');
@@ -139,7 +141,19 @@ export function Settings({ onBack }: SettingsProps) {
 
   const handleLockVault = async () => {
     await lockVault();
-    onBack();
+    if (onBack) {
+      onBack();
+      return;
+    }
+    navigate('/login');
+  };
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    navigate(-1);
   };
 
   // Render different states
@@ -309,7 +323,7 @@ export function Settings({ onBack }: SettingsProps) {
     <div className="chat-container">
       <div className="settings-container">
         <div className="settings-header">
-          <button className="back-button" onClick={onBack}>
+          <button className="back-button" onClick={handleBack}>
             &#8592; Back
           </button>
           <h1>Settings</h1>

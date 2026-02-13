@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useContactStore } from '../stores/contactStore';
 import { useConversationStore } from '../stores/conversationStore';
@@ -13,19 +14,14 @@ import { EmptyState } from './EmptyState';
 
 import '../styles/chat.css';
 
-interface ChatProps {
-  onNavigate?: (page: 'chat' | 'settings') => void;
-}
-
-export function Chat({ onNavigate }: ChatProps) {
+export function Chat() {
   const user = useAuthStore(state => state.user);
   const { contacts, loadAllContacts } = useContactStore();
-  const { activeConversationId, loadAllConversations, discoverConversations } = useConversationStore();
+  const { conversations, activeConversationId, loadAllConversations, discoverConversations, setActiveConversation } = useConversationStore();
   const { decryptContacts, decryptIdentity } = useCrypto();
+  const { username } = useParams<{ username: string }>();
+  const navigate = useNavigate();
   const [hasDiscovered, setHasDiscovered] = useState(false);
-
-  // Default no-op handler if onNavigate not provided
-  const handleNavigate = onNavigate || (() => {});
 
   // Load contacts on mount
   useEffect(() => {
@@ -62,13 +58,41 @@ export function Chat({ onNavigate }: ChatProps) {
     initializeDiscovery();
   }, [user, hasDiscovered, discoverConversations]);
 
+  useEffect(() => {
+    if (!username) {
+      setActiveConversation(null);
+      return;
+    }
+
+    const decodedUsername = decodeURIComponent(username).toLowerCase();
+    if (decodedUsername === 'inbox') {
+      setActiveConversation(null);
+      navigate('/conversation', { replace: true });
+      return;
+    }
+
+    const matchedConversation = conversations.find(
+      (conversation) => conversation.participantUsername.toLowerCase() === decodedUsername
+    );
+
+    if (matchedConversation) {
+      if (matchedConversation.conversationId !== activeConversationId) {
+        setActiveConversation(matchedConversation.conversationId);
+      }
+      return;
+    }
+
+    setActiveConversation(null);
+    navigate('/conversation', { replace: true });
+  }, [username, conversations, activeConversationId, setActiveConversation, navigate]);
+
   if (!user) {
     return <div className="loading-screen"><div className="spinner" /></div>;
   }
 
   return (
     <div className="chat-container">
-      <Sidebar onNavigate={handleNavigate} />
+      <Sidebar />
       <main className="chat-main">
         {activeConversationId ? (
           <ConversationView conversationId={activeConversationId} />

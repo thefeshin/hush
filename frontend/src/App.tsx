@@ -4,6 +4,8 @@
  */
 
 import { useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { Toaster, toast } from 'react-hot-toast';
 import { CryptoProvider, useCrypto } from './crypto/CryptoContext';
 import { useAuthStore, User } from './stores/authStore';
 import { initDatabase } from './services/storage';
@@ -23,16 +25,58 @@ import type { VaultKey } from './types/crypto';
 import './styles/main.css';
 import './styles/pwa.css';
 
-type AppState = 'loading' | 'vault-entry' | 'pin-entry' | 'login' | 'register' | 'chat' | 'settings';
+type AppState = 'loading' | 'vault-entry' | 'pin-entry' | 'ready';
+
+function showPinSetupReminder(onOpenSettings: () => void) {
+  toast.custom((t) => (
+    <div
+      role="status"
+      style={{
+        background: '#17212b',
+        color: '#f8fafc',
+        border: '1px solid #334155',
+        borderRadius: '10px',
+        padding: '12px 14px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        maxWidth: '440px',
+        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)'
+      }}
+    >
+      <div style={{ fontSize: '14px', lineHeight: 1.4 }}>
+        Set up a PIN to avoid entering your 12 words each time.
+      </div>
+      <button
+        style={{
+          border: 'none',
+          borderRadius: '8px',
+          padding: '6px 10px',
+          background: '#22c55e',
+          color: '#052e16',
+          fontWeight: 700,
+          cursor: 'pointer'
+        }}
+        onClick={() => {
+          toast.dismiss(t.id);
+          onOpenSettings();
+        }}
+      >
+        Set PIN
+      </button>
+    </div>
+  ), { duration: 12000 });
+}
 
 function AppContent() {
   const [appState, setAppState] = useState<AppState>('loading');
   const [vaultToken, setVaultToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [vaultError, setVaultError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const { isAuthenticated, user, checkAuth, setUser } = useAuthStore();
-  const { isUnlocked, unlockVaultWithKey: unlockVaultWithKeyRaw } = useCrypto();
+  const { unlockVaultWithKey: unlockVaultWithKeyRaw } = useCrypto();
   const unlockVaultWithKey = unlockVaultWithKeyRaw as (key: VaultKey) => Promise<void>;
 
   // Initialize database on mount
@@ -67,16 +111,6 @@ function AppContent() {
     init();
   }, []);
 
-  // Handle auth state changes
-  useEffect(() => {
-    console.log('[App] State check:', { isAuthenticated, isUnlocked, appState, user: user?.username });
-
-    // Only auto-transition to chat if not in settings mode
-    if (isAuthenticated && isUnlocked && appState !== 'chat' && appState !== 'settings') {
-      setAppState('chat');
-    }
-  }, [isAuthenticated, isUnlocked, appState]);
-
   const handleVaultSuccess = async (token: string, _salt: string) => {
     console.log('[App] Vault verified...');
     setVaultToken(token);
@@ -89,9 +123,11 @@ function AppContent() {
       if (storedKey) {
         await unlockVaultWithKey(storedKey);
       }
-      setAppState('chat');
+      setAppState('ready');
+      navigate('/conversation', { replace: true });
     } else {
-      setAppState('login');
+      setAppState('ready');
+      navigate('/login', { replace: true });
     }
   };
 
@@ -106,7 +142,12 @@ function AppContent() {
       await unlockVaultWithKey(storedKey);
     }
 
-    setAppState('chat');
+    if (!(await isPINEnabled())) {
+      showPinSetupReminder(() => navigate('/settings'));
+    }
+
+    setAppState('ready');
+    navigate('/conversation', { replace: true });
   };
 
   const handleRegisterSuccess = async (newUser: User) => {
@@ -120,21 +161,28 @@ function AppContent() {
       await unlockVaultWithKey(storedKey);
     }
 
-    setAppState('chat');
+    if (!(await isPINEnabled())) {
+      showPinSetupReminder(() => navigate('/settings'));
+    }
+
+    setAppState('ready');
+    navigate('/conversation', { replace: true });
   };
 
   const handlePINUnlock = async (vaultKey: VaultKey) => {
     await unlockVaultWithKey(vaultKey);
-    setAppState('chat');
+    setAppState('ready');
+    navigate('/conversation', { replace: true });
   };
 
   const handleVaultEntryCancel = () => {
     // User cancelled PIN entry, go back to full vault entry
-    setAppState('vault-entry');
-  };
+      setAppState('vault-entry');
+    };
 
   return (
     <>
+      <Toaster position="top-right" />
       {/* PWA Banners */}
       <UpdateBanner />
 
@@ -162,32 +210,65 @@ function AppContent() {
         />
       )}
 
-      {appState === 'login' && vaultToken && (
-        <LoginForm
-          vaultToken={vaultToken}
-          onSuccess={handleLoginSuccess}
-          onSwitchToRegister={() => setAppState('register')}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        />
-      )}
-
-      {appState === 'register' && vaultToken && (
-        <RegisterForm
-          vaultToken={vaultToken}
-          onSuccess={handleRegisterSuccess}
-          onSwitchToLogin={() => setAppState('login')}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        />
-      )}
-
-      {appState === 'chat' && (
-        <Chat onNavigate={(page) => setAppState(page === 'settings' ? 'settings' : 'chat')} />
-      )}
-
-      {appState === 'settings' && (
-        <Settings onBack={() => setAppState('chat')} />
+      {appState === 'ready' && (
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              !isAuthenticated
+                ? (
+                    vaultToken ? (
+                      <LoginForm
+                        vaultToken={vaultToken}
+                        onSuccess={handleLoginSuccess}
+                        onSwitchToRegister={() => navigate('/signup')}
+                        isLoading={isLoading}
+                        setIsLoading={setIsLoading}
+                      />
+                    ) : (
+                      <Navigate to="/" replace />
+                    )
+                  )
+                : <Navigate to="/conversation" replace />
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              !isAuthenticated
+                ? (
+                    vaultToken ? (
+                      <RegisterForm
+                        vaultToken={vaultToken}
+                        onSuccess={handleRegisterSuccess}
+                        onSwitchToLogin={() => navigate('/login')}
+                        isLoading={isLoading}
+                        setIsLoading={setIsLoading}
+                      />
+                    ) : (
+                      <Navigate to="/" replace />
+                    )
+                  )
+                : <Navigate to="/conversation" replace />
+            }
+          />
+          <Route
+            path="/conversation"
+            element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/conversation/:username"
+            element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/settings"
+            element={isAuthenticated ? <Settings /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="*"
+            element={<Navigate to={isAuthenticated ? '/conversation' : '/login'} replace />}
+          />
+        </Routes>
       )}
 
       {/* Bottom Banners */}
@@ -201,7 +282,9 @@ export function App() {
   return (
     <CryptoProvider>
       <RealtimeProvider>
-        <AppContent />
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
       </RealtimeProvider>
     </CryptoProvider>
   );
