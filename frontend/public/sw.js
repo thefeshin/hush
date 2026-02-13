@@ -71,10 +71,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip API calls (except auth/salt which can be cached)
-  if (url.pathname.startsWith('/api/') && !url.pathname.includes('/auth/salt')) {
-    // Network-first for API calls
-    event.respondWith(networkFirst(request));
+  // Never cache authenticated API responses.
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(networkOnly(request));
     return;
   }
 
@@ -127,6 +126,20 @@ async function networkFirst(request) {
     if (cached) {
       return cached;
     }
+    return new Response(JSON.stringify({ error: 'offline' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+/**
+ * Network-only strategy for authenticated endpoints.
+ */
+async function networkOnly(request) {
+  try {
+    return await fetch(request);
+  } catch (_error) {
     return new Response(JSON.stringify({ error: 'offline' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' }

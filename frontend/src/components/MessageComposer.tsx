@@ -9,7 +9,7 @@ import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { saveMessage } from '../services/storage';
-import { queueMessage, processQueue } from '../services/messageQueue';
+import { queueMessage } from '../services/messageQueue';
 import type { MessagePayload } from '../types/crypto';
 
 interface Props {
@@ -32,20 +32,6 @@ export function MessageComposer({ conversationId, participantId }: Props) {
   useEffect(() => {
     inputRef.current?.focus();
   }, [conversationId]);
-
-  // Process queue when connection is restored
-  useEffect(() => {
-    if (isConnected) {
-      processQueue(sendMessage).then(({ sent, failed }) => {
-        if (sent > 0) {
-          console.log(`Sent ${sent} queued messages`);
-        }
-        if (failed > 0) {
-          console.warn(`Failed to send ${failed} queued messages`);
-        }
-      }).catch(console.error);
-    }
-  }, [isConnected, sendMessage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +76,7 @@ export function MessageComposer({ conversationId, participantId }: Props) {
         markMessageSent(tempId, result.id);
       } else {
         // Queue for later when offline
-        const queuedId = await queueMessage(conversationId, encrypted, payloadString);
+        const queuedId = await queueMessage(conversationId, tempId, encrypted);
 
         // Save to local storage with queued ID
         await saveMessage(queuedId, conversationId, encrypted, payload.timestamp);

@@ -8,8 +8,8 @@ import type { EncryptedData } from '../types/crypto';
 interface QueuedMessage {
   id: string;
   threadId: string;
+  localMessageId: string;
   encrypted: EncryptedData;
-  payload: string; // Serialized MessagePayload
   queuedAt: number;
   attempts: number;
 }
@@ -23,7 +23,7 @@ interface QueueDBSchema extends DBSchema {
 }
 
 const DB_NAME = 'hush-queue';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let db: IDBPDatabase<QueueDBSchema> | null = null;
 
@@ -31,6 +31,9 @@ async function getDB(): Promise<IDBPDatabase<QueueDBSchema>> {
   if (!db) {
     db = await openDB<QueueDBSchema>(DB_NAME, DB_VERSION, {
       upgrade(database) {
+        if (database.objectStoreNames.contains('queue')) {
+          database.deleteObjectStore('queue');
+        }
         const store = database.createObjectStore('queue', { keyPath: 'id' });
         store.createIndex('by-thread', 'threadId');
         store.createIndex('by-time', 'queuedAt');
@@ -45,8 +48,8 @@ async function getDB(): Promise<IDBPDatabase<QueueDBSchema>> {
  */
 export async function queueMessage(
   threadId: string,
-  encrypted: EncryptedData,
-  payload: string
+  localMessageId: string,
+  encrypted: EncryptedData
 ): Promise<string> {
   const id = `queued-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -54,8 +57,8 @@ export async function queueMessage(
   await database.put('queue', {
     id,
     threadId,
+    localMessageId,
     encrypted,
-    payload,
     queuedAt: Date.now(),
     attempts: 0
   });
@@ -111,7 +114,8 @@ export async function incrementAttempts(id: string): Promise<void> {
  * Process the queue (send pending messages)
  */
 export async function processQueue(
-  sendFn: (threadId: string, encrypted: EncryptedData) => Promise<{ id: string }>
+  sendFn: (threadId: string, encrypted: EncryptedData) => Promise<{ id: string }>,
+  onSent?: (localMessageId: string, serverMessageId: string) => Promise<void>
 ): Promise<{ sent: number; failed: number }> {
   const messages = await getQueuedMessages();
   let sent = 0;
@@ -126,10 +130,13 @@ export async function processQueue(
     }
 
     try {
-      await sendFn(msg.threadId, msg.encrypted);
+      const result = await sendFn(msg.threadId, msg.encrypted);
+      if (onSent) {
+        await onSent(msg.localMessageId, result.id);
+      }
       await removeFromQueue(msg.id);
       sent++;
-    } catch (error) {
+    } catch (_error) {
       await incrementAttempts(msg.id);
       failed++;
     }

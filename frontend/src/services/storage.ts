@@ -227,6 +227,30 @@ export async function saveMessage(
 }
 
 /**
+ * Replace a local message ID with the canonical server ID.
+ */
+export async function replaceMessageId(oldId: string, newId: string): Promise<void> {
+  if (oldId === newId) {
+    return;
+  }
+
+  const database = getDB();
+  const record = await database.get('messages', oldId);
+  if (!record) {
+    return;
+  }
+
+  const existing = await database.get('messages', newId);
+  if (existing) {
+    await database.delete('messages', oldId);
+    return;
+  }
+
+  await database.put('messages', { ...record, id: newId });
+  await database.delete('messages', oldId);
+}
+
+/**
  * Load messages for a thread
  */
 export async function loadMessages(

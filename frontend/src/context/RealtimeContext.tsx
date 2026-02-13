@@ -9,7 +9,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
-import { saveMessage } from '../services/storage';
+import { replaceMessageId, saveMessage } from '../services/storage';
+import { processQueue } from '../services/messageQueue';
 import type { EncryptedData, MessagePayload } from '../types/crypto';
 
 interface RealtimeContextValue {
@@ -28,7 +29,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const [userSubscribed, setUserSubscribed] = useState(false);
 
   const { isAuthenticated, user } = useAuthStore();
-  const { addMessage } = useMessageStore();
+  const { addMessage, markMessageSent } = useMessageStore();
   const { updateLastMessage, incrementUnread, getConversation, addConversation } = useConversationStore();
   const { isUnlocked, getThreadKey, decryptMessage } = useCrypto();
 
@@ -110,10 +111,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       const plaintext = await decryptMessage(threadKey, encrypted);
       const payload: MessagePayload = JSON.parse(plaintext);
 
-      if (payload.sender_id === user.id) {
-        return;
-      }
-
       const timestamp = createdAt ? new Date(createdAt).getTime() : payload.timestamp;
       await saveMessage(id, conversationId, encrypted, timestamp);
 
@@ -128,7 +125,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       });
 
       updateLastMessage(conversationId, payload.timestamp);
-      incrementUnread(conversationId);
+      if (payload.sender_id !== user.id) {
+        incrementUnread(conversationId);
+      }
     } catch (error) {
       console.error('Failed to process incoming realtime message', error);
     }
@@ -142,6 +141,38 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     updateLastMessage,
     incrementUnread
   ]);
+
+  useEffect(() => {
+    const replayQueue = async () => {
+      if (connectionState !== ConnectionState.CONNECTED) {
+        return;
+      }
+
+      await processQueue(
+        (threadId, encrypted) => wsService.sendMessage(threadId, encrypted),
+        async (localMessageId, serverMessageId) => {
+          await replaceMessageId(localMessageId, serverMessageId);
+          markMessageSent(localMessageId, serverMessageId);
+        }
+      );
+    };
+
+    replayQueue().catch((error) => {
+      console.error('Failed to process queued messages', error);
+    });
+
+    const handleSyncRequest = () => {
+      replayQueue().catch((error) => {
+        console.error('Failed to process queued messages', error);
+      });
+    };
+
+    window.addEventListener('hush:sync-messages', handleSyncRequest);
+
+    return () => {
+      window.removeEventListener('hush:sync-messages', handleSyncRequest);
+    };
+  }, [connectionState, markMessageSent]);
 
   useEffect(() => {
     const unsubConnection = wsService.onConnectionChange(() => {

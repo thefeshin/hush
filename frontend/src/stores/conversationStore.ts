@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { saveThread, loadThreads, loadThread } from '../services/storage';
 import { discoverThreads as apiDiscoverThreads } from '../services/api';
+import { getSyncService } from '../services/sync';
 import type { EncryptedData, ThreadMetadata } from '../types/crypto';
 
 export interface Conversation {
@@ -207,6 +208,19 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
       // Filter out conversations we already have
       const newConversationIds = conversationIds.filter(id => !existingIds.has(id));
+
+      // Backfill missing thread metadata from server.
+      if (newConversationIds.length > 0) {
+        const syncService = getSyncService();
+        const serverThreads = await syncService.queryThreads(newConversationIds);
+        for (const thread of serverThreads) {
+          await saveThread(
+            thread.id,
+            { ciphertext: thread.ciphertext, iv: thread.iv },
+            new Date(thread.created_at).getTime()
+          );
+        }
+      }
 
       // For each new conversation, try to load from local storage
       const newConversations: Conversation[] = [];

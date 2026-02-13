@@ -81,6 +81,8 @@ export class WebSocketService {
     resolve: (result: { id: string }) => void;
     reject: (error: Error) => void;
     threadId: string;
+    ciphertext: string;
+    iv: string;
   }>();
 
   // Heartbeat
@@ -203,7 +205,9 @@ export class WebSocketService {
       this.pendingMessages.set(tempId, {
         resolve,
         reject,
-        threadId
+        threadId,
+        ciphertext: encrypted.ciphertext,
+        iv: encrypted.iv
       });
 
       // Send message
@@ -324,6 +328,20 @@ export class WebSocketService {
     // Resolve any pending send for this thread
     // Note: The server echoes our own messages back
     if (msg.id && msg.thread_id) {
+      if (msg.ciphertext && msg.iv) {
+        for (const [tempId, pending] of this.pendingMessages) {
+          if (
+            pending.threadId === msg.thread_id
+            && pending.ciphertext === msg.ciphertext
+            && pending.iv === msg.iv
+          ) {
+            this.pendingMessages.delete(tempId);
+            pending.resolve({ id: msg.id });
+            return;
+          }
+        }
+      }
+
       // Find and resolve pending message
       for (const [tempId, pending] of this.pendingMessages) {
         if (pending.threadId === msg.thread_id) {
