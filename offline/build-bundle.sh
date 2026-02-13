@@ -197,11 +197,10 @@ build_image_bundle() {
 
   "${COMPOSE_CMD[@]}" "${build_args[@]}"
 
-  if mapfile -t compose_images < <("${COMPOSE_CMD[@]}" config --images 2>/dev/null | sed '/^\s*$/d' | sort -u); then
-    :
-  else
-    compose_images=()
-  fi
+  compose_images=()
+  while IFS= read -r image; do
+    [[ -n "$image" ]] && compose_images+=("$image")
+  done < <("${COMPOSE_CMD[@]}" config --images 2>/dev/null | sed '/^[[:space:]]*$/d' | sort -u)
 
   [[ ${#compose_images[@]} -gt 0 ]] || fail "Could not resolve docker images from compose config"
 
@@ -285,6 +284,11 @@ PYTHON_PKGS=(python3 python3-pip python3-venv)
 apt-get update
 apt-get install "${APT_OPTS[@]}" ca-certificates curl gnupg
 
+# Ubuntu Docker images often include apt auto-clean hooks that remove cached
+# .deb files immediately after apt operations. Disable this so --download-only
+# artifacts remain available for bundling.
+rm -f /etc/apt/apt.conf.d/docker-clean
+
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
@@ -305,17 +309,40 @@ apt-get update
 } > /out/manifests/apt-candidates.txt
 
 rm -f /var/cache/apt/archives/*.deb
-apt-get install "${APT_OPTS[@]}" --download-only "${PYTHON_PKGS[@]}"
-cp /var/cache/apt/archives/*.deb /out/python/
+apt-get install "${APT_OPTS[@]}" --reinstall --download-only "${PYTHON_PKGS[@]}"
+if compgen -G "/var/cache/apt/archives/*.deb" >/dev/null; then
+  cp /var/cache/apt/archives/*.deb /out/python/
+else
+  echo "No Python .deb packages were downloaded" >&2
+  exit 1
+fi
 
 rm -f /var/cache/apt/archives/*.deb
-apt-get install "${APT_OPTS[@]}" --download-only "${DOCKER_PKGS[@]}"
-cp /var/cache/apt/archives/*.deb /out/docker-deps/
+apt-get install "${APT_OPTS[@]}" --reinstall --download-only "${DOCKER_PKGS[@]}"
+if compgen -G "/var/cache/apt/archives/*.deb" >/dev/null; then
+  cp /var/cache/apt/archives/*.deb /out/docker-deps/
+else
+  echo "No Docker dependency .deb packages were downloaded" >&2
+  exit 1
+fi
 EOF
 
-  cp "$target_dir/pkgs/docker"/*.deb "$target_dir/pkgs/all/"
-  cp "$target_dir/pkgs/python"/*.deb "$target_dir/pkgs/all/"
-  cp "$deps_tmp_dir"/*.deb "$target_dir/pkgs/all/"
+  local source_dir
+  local -a deb_files
+  for source_dir in "$target_dir/pkgs/docker" "$target_dir/pkgs/python" "$deps_tmp_dir"; do
+    shopt -s nullglob
+    deb_files=("$source_dir"/*.deb)
+    shopt -u nullglob
+
+    if [[ ${#deb_files[@]} -eq 0 ]]; then
+      if [[ "$source_dir" == "$target_dir/pkgs/python" ]]; then
+        fail "No python .deb packages were collected for $codename"
+      fi
+      continue
+    fi
+
+    cp "${deb_files[@]}" "$target_dir/pkgs/all/"
+  done
 
   find "$target_dir/pkgs/python" -maxdepth 1 -type f -name "*.deb" -printf "%f\n" | sort -u > "$target_dir/manifests/python-packages.txt"
   find "$target_dir/pkgs/all" -maxdepth 1 -type f -name "*.deb" -printf "%f\n" | sort -u > "$target_dir/manifests/all-packages.txt"
