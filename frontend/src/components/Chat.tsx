@@ -2,52 +2,77 @@
  * Main chat interface
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useContactStore } from '../stores/contactStore';
-import { useThreadStore } from '../stores/threadStore';
+import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { Sidebar } from './Sidebar';
-import { ThreadView } from './ThreadView';
+import { ConversationView } from './ConversationView';
 import { EmptyState } from './EmptyState';
 
 import '../styles/chat.css';
 
-export function Chat() {
-  const identity = useAuthStore(state => state.identity);
+interface ChatProps {
+  onNavigate?: (page: 'chat' | 'settings') => void;
+}
+
+export function Chat({ onNavigate }: ChatProps) {
+  const user = useAuthStore(state => state.user);
   const { contacts, loadAllContacts } = useContactStore();
-  const { activeThreadId, loadAllThreads } = useThreadStore();
+  const { activeConversationId, loadAllConversations, discoverConversations } = useConversationStore();
   const { decryptContacts, getThreadId, decryptIdentity } = useCrypto();
+  const [hasDiscovered, setHasDiscovered] = useState(false);
+
+  // Default no-op handler if onNavigate not provided
+  const handleNavigate = onNavigate || (() => {});
 
   // Load contacts on mount
   useEffect(() => {
-    if (identity) {
+    if (user) {
       loadAllContacts(decryptContacts);
     }
-  }, [identity]);
+  }, [user]);
 
-  // Load threads after contacts are loaded
+  // Load conversations after contacts are loaded
   useEffect(() => {
-    if (identity && contacts.length > 0) {
-      loadAllThreads(
-        identity.userId,
+    if (user && contacts.length > 0) {
+      loadAllConversations(
+        user.id,
         contacts,
         getThreadId,
         decryptIdentity
       );
     }
-  }, [identity, contacts.length]);
+  }, [user, contacts.length]);
 
-  if (!identity) {
+  // Discover conversations from server and subscribe via WebSocket
+  useEffect(() => {
+    if (!user || hasDiscovered) return;
+
+    const initializeDiscovery = async () => {
+      try {
+        // Discover all conversations for this user (including unknown contacts).
+        await discoverConversations(user.id, decryptIdentity);
+        setHasDiscovered(true);
+      } catch (err) {
+        console.error('Failed to initialize conversation discovery', err);
+      }
+    };
+
+    initializeDiscovery();
+  }, [user, hasDiscovered]);
+
+  if (!user) {
     return <div className="loading-screen"><div className="spinner" /></div>;
   }
 
   return (
     <div className="chat-container">
-      <Sidebar />
+      <Sidebar onNavigate={handleNavigate} />
       <main className="chat-main">
-        {activeThreadId ? (
-          <ThreadView threadId={activeThreadId} />
+        {activeConversationId ? (
+          <ConversationView conversationId={activeConversationId} />
         ) : (
           <EmptyState />
         )}

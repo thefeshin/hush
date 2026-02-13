@@ -1,134 +1,226 @@
 # HUSH - Zero-Knowledge Encrypted Chat Vault
 
-Private, encrypted conversations with zero server knowledge.
+[![GitHub Stars](https://img.shields.io/github/stars/thefeshin/hush?style=for-the-badge)](https://github.com/thefeshin/hush/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/thefeshin/hush?style=for-the-badge)](https://github.com/thefeshin/hush/network/members)
+[![License](https://img.shields.io/github/license/thefeshin/hush?style=for-the-badge)](https://github.com/thefeshin/hush/blob/main/LICENSE)
 
----
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
+
+English | [فارسی](README.fa.md) | [License](LICENSE)
+
+HUSH is a self-hosted private messaging vault focused on client-side cryptography and minimal server trust.
+The backend relays encrypted payloads and stores only metadata needed for routing, discovery, and session management.
+
+## Table of Contents
+
+- [What HUSH Provides](#what-hush-provides)
+- [Repository Layout](#repository-layout)
+- [Security and Realtime Notes](#security-and-realtime-notes)
+- [Prerequisites](#prerequisites)
+- [Online Deployment (Connected Host)](#online-deployment-connected-host)
+- [Guided deployment (recommended)](#guided-deployment-recommended)
+- [Manual Docker deployment](#manual-docker-deployment)
+- [Local Development (Manual, No hush.sh local mode)](#local-development-manual-no-hushsh-local-mode)
+- [Offline Deployment (Air-Gapped)](#offline-deployment-air-gapped)
+- [On internet-connected machine](#on-internet-connected-machine)
+- [Transfer to air-gapped machine](#transfer-to-air-gapped-machine)
+- [On air-gapped machine](#on-air-gapped-machine)
+- [Operations](#operations)
+- [Current Status](#current-status)
+- [Planned Improvements](#planned-improvements)
+- [Language and License](#language-and-license)
+
+## What HUSH Provides
+
+- End-to-end encryption workflow in the client (Argon2id + HKDF + AES-GCM).
+- Cookie-based authentication with refresh-token rotation.
+- Real-time messaging over WebSocket with offline queue support.
+- PWA frontend and Docker-first deployment.
+- Air-gapped/offline bundle deployment scripts.
+
+## Repository Layout
+
+- `backend/`: FastAPI API + WebSocket relay.
+- `frontend/`: React + TypeScript client (crypto, stores, PWA).
+- `cli/`: interactive setup and secret generation.
+- `offline/`: bundle/deploy scripts for air-gapped environments.
+- `nginx/`: reverse proxy and TLS config.
+
+## Security and Realtime Notes
+
+- WebSocket authentication is cookie-only (`access_token` cookie).
+- `subscribe_user` payload is `{"type":"subscribe_user"}` (no client `user_id`).
+- REST and WebSocket payload validation enforces:
+  - strict base64 decoding,
+  - IV length = 12 bytes,
+  - ciphertext caps (messages: 64 KiB decoded, thread metadata: 16 KiB decoded),
+  - per-connection WebSocket safeguards (subscription cap + inbound rate guard).
 
 ## Prerequisites
 
-- Docker 20.10+
-- Docker Compose 2.0+
-- Python 3.7+
-- OpenSSL (included with Git for Windows, pre-installed on Linux/macOS)
+- Docker + Docker Compose
+- Python 3
+- Node.js + npm (for local frontend dev)
+- OpenSSL (for local cert generation)
+- For air-gapped bootstrap: Ubuntu 22.04 (jammy) amd64 or Ubuntu 24.04 (noble) amd64
 
----
+## Online Deployment (Connected Host)
 
-## Deployment
+### Guided deployment (recommended)
 
-**Bash (Linux/macOS):**
+Linux/macOS:
 ```bash
-chmod +x hush
-./hush deploy
+chmod +x ./hush.sh
+./hush.sh
 ```
 
-**PowerShell (Windows):**
-```powershell
-python hush deploy
-```
+`hush.sh` now runs Docker deployment only. Access app at `https://localhost`.
 
-This single command automatically:
-1. Installs required Python packages
-2. Generates SSL certificates (if missing)
-3. Prompts for security configuration
-4. Generates 12-word passphrase and secrets
-5. Builds and starts all Docker containers
+### Manual Docker deployment
 
-Access at: **https://localhost**
-
----
-
-## Development Mode (Without Docker)
-
-For local development/testing without the full stack.
-
-### 1. Database (PostgreSQL via Docker)
-
-**Bash:**
 ```bash
-docker run -d --name hush-postgres \
-  -e POSTGRES_USER=hush \
-  -e POSTGRES_PASSWORD=hush \
-  -e POSTGRES_DB=hush \
-  -p 5432:5432 \
-  postgres:16-alpine
+docker compose build
+docker compose up -d
+docker compose ps
 ```
 
-**PowerShell:**
-```powershell
-docker run -d --name hush-postgres `
-  -e POSTGRES_USER=hush `
-  -e POSTGRES_PASSWORD=hush `
-  -e POSTGRES_DB=hush `
-  -p 5432:5432 `
-  postgres:16-alpine
+Development-only backend hot-reload bind mount lives in `docker-compose.override.yml`.
+
+## Local Development (Manual, No hush.sh local mode)
+
+1. Start PostgreSQL:
+```bash
+docker run -d --name hush-postgres -e POSTGRES_USER=hush -e POSTGRES_PASSWORD=hush -e POSTGRES_DB=hush -p 5432:5432 postgres:16-alpine
 ```
 
-### 2. Backend
-
-**Bash:**
+2. Start backend:
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate
+# Windows: .\venv\Scripts\Activate.ps1
+# Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-**PowerShell:**
-```powershell
-cd backend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+Optional backend tests:
+```bash
+pip install -r requirements-dev.txt
+pytest -q
 ```
 
-Backend at: **http://localhost:8000**
-
-> **Note:** Requires `.env` file with `AUTH_HASH`, `KDF_SALT`, `JWT_SECRET`, `DATABASE_URL` (or run `./hush deploy` first to generate).
-
-### 3. Frontend
-
-**Bash & PowerShell (same):**
+3. Start frontend:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Frontend at: **http://localhost:5173**
+Frontend runs at `http://localhost:3000` (configured in `frontend/vite.config.ts`).
 
----
+## Offline Deployment (Air-Gapped)
 
-## Troubleshooting
+### On internet-connected machine
 
-### View logs
+Linux/macOS:
 ```bash
-docker-compose logs -f
+bash ./offline/build-bundle.sh --target all
 ```
 
-### Check container health
+Supported targets: Ubuntu 22.04 (jammy) amd64 and Ubuntu 24.04 (noble) amd64.
+
+This produces:
+- `offline/bundles/jammy-amd64/*` and/or `offline/bundles/noble-amd64/*`
+- each bundle includes Docker image tar, all required `.deb` packages, manifests, checksums, and deployment scripts
+- `.env` is intentionally excluded from bundles
+
+### Transfer to air-gapped machine
+
+Copy:
+- the full project directory (including `offline/bundles/<target>-amd64/`)
+- optional: copy `.env` if you want to reuse existing vault secrets
+
+SCP examples:
 ```bash
-docker-compose ps
+# Copy full repository
+scp -r /path/to/hush user@AIRGAP_HOST:/opt/
+
+# Optional: copy existing .env for secret reuse
+scp /path/to/hush/.env user@AIRGAP_HOST:/opt/hush/
 ```
 
-### Restart a service
+### On air-gapped machine
+
+Linux/macOS:
 ```bash
-docker-compose restart backend
+bash ./offline/deploy-airgapped.sh
 ```
 
-### Full reset (wipes all data)
+If `.env` already exists, deployment prompts you to use it or create a new one.
+If `.env` is missing, deployment creates it on the air-gapped machine and prints the 12 words.
 
-**Bash:**
+Manual equivalent steps:
 ```bash
-docker-compose down -v
-rm .env
-./hush deploy
+bash ./offline/install-system-deps.sh
+bash ./offline/init-airgap-env.sh
+bash ./offline/deploy-offline.sh
 ```
 
-**PowerShell:**
-```powershell
-docker-compose down -v
-Remove-Item .env
-python hush deploy
+Optional secret rotation on air-gapped machine:
+```bash
+bash ./offline/deploy-airgapped.sh --rotate-secrets
 ```
+
+`install-system-deps.sh` installs Docker Engine + Compose plugin + Python3/PIP/venv from local `.deb` files only (no network), with mandatory checksum verification.
+
+`.env` is mandatory for deployment; `deploy-offline.sh` hard-fails if it is missing or missing required keys and tells you exactly which command to run next.
+
+## Operations
+
+```bash
+docker compose logs -f
+docker compose ps
+docker compose restart backend
+docker compose down -v
+```
+
+## Current Status
+
+P0 hardening is complete as of **February 10, 2026**:
+- strict server-side participant authorization is enforced for REST and WebSocket message paths,
+- WebSocket identity binding no longer trusts client-supplied `user_id`,
+- WebSocket query-token auth is removed (cookie-only),
+- raw vault-key storage in `sessionStorage` is removed (memory-only runtime cache).
+
+P1 hardening is also complete as of **February 10, 2026**:
+- vault lock now preserves PIN setup by default,
+- REST fallback send path is aligned to `POST /api/messages`,
+- offline bundle scripts generate supported `FAILURE_MODE=ip_temp`,
+- backend startup fails fast on missing auth secrets or invalid failure mode,
+- `/health/db` now returns sanitized `503` on database failure.
+
+Post-P1 refactor/validation phases are complete as of **February 10, 2026**:
+- legacy thread/conversation compatibility layers were removed in favor of conversation-first frontend state,
+- realtime connection lifecycle is centralized under a single provider-owned path,
+- strict payload guards are enforced for REST/WebSocket encrypted fields (base64 validation, IV length, ciphertext caps),
+- WebSocket now applies per-connection subscription caps and inbound message rate guards.
+
+Breaking client contract changes:
+- WebSocket no longer accepts `?token=...`.
+- `subscribe_user` payload is now `{"type":"subscribe_user"}` (no `user_id` field).
+
+## Planned Improvements
+
+1. Add end-to-end reconnect/resubscribe integration tests against a live WebSocket server.
+2. Add deployment-level override knobs for payload/rate limits where operators need tuning.
+3. Expand frontend queue replay tests for intermittent connectivity scenarios.
+
+## Language and License
+
+- Persian docs: `README.fa.md`
+- License: MIT (`LICENSE`)

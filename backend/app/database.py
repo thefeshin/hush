@@ -28,6 +28,8 @@ async def init_db():
 
 async def _init_schema(conn: asyncpg.Connection):
     """Create tables if they don't exist"""
+    await conn.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS threads (
             id UUID PRIMARY KEY,
@@ -73,6 +75,71 @@ async def _init_schema(conn: asyncpg.Connection):
             first_failure_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             last_failure_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
+    """)
+
+    # Users table for multi-user authentication
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            username VARCHAR(50) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            last_login TIMESTAMP WITH TIME ZONE
+        )
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_users_username
+            ON users(username)
+    """)
+
+    # Refresh tokens table for session management
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS refresh_tokens (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token_hash VARCHAR(255) NOT NULL,
+            expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            revoked BOOLEAN DEFAULT FALSE
+        )
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id
+            ON refresh_tokens(user_id)
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash
+            ON refresh_tokens(token_hash)
+    """)
+
+    await conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash_unique
+            ON refresh_tokens(token_hash)
+    """)
+
+    # Thread participants table for thread discovery
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS thread_participants (
+            thread_id UUID PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
+            participant_1 UUID NOT NULL,
+            participant_2 UUID NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_thread_participants_p1
+            ON thread_participants(participant_1)
+            WHERE participant_1 IS NOT NULL
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_thread_participants_p2
+            ON thread_participants(participant_2)
+            WHERE participant_2 IS NOT NULL
     """)
 
 

@@ -1,19 +1,21 @@
 /**
  * WebSocket service for real-time communication
- * Handles connection, reconnection, and message routing
+ * Uses cookie-based authentication (cookies sent automatically)
  */
 
 import type { EncryptedData } from '../types/crypto';
 
 // Message types from server
 interface ServerMessage {
-  type: 'subscribed' | 'unsubscribed' | 'message' | 'error' | 'heartbeat' | 'pong';
+  type: 'subscribed' | 'unsubscribed' | 'message' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed';
   thread_id?: string;
+  sender_id?: string;  // Sender's user ID (plaintext, for auto-discovery)
   id?: string;
   ciphertext?: string;
   iv?: string;
   created_at?: string;
   message?: string;
+  thread_count?: number;
 }
 
 // Message types to server
@@ -38,7 +40,11 @@ interface ClientPing {
   type: 'ping';
 }
 
-type ClientPayload = ClientSubscribe | ClientUnsubscribe | ClientMessage | ClientPing;
+interface ClientSubscribeUser {
+  type: 'subscribe_user';
+}
+
+type ClientPayload = ClientSubscribe | ClientUnsubscribe | ClientMessage | ClientPing | ClientSubscribeUser;
 
 // Event handlers
 type MessageHandler = (msg: ServerMessage) => void;
@@ -54,7 +60,6 @@ export enum ConnectionState {
 
 export class WebSocketService {
   private ws: WebSocket | null = null;
-  private token: string | null = null;
   private url: string;
 
   // Connection state
@@ -76,6 +81,8 @@ export class WebSocketService {
     resolve: (result: { id: string }) => void;
     reject: (error: Error) => void;
     threadId: string;
+    ciphertext: string;
+    iv: string;
   }>();
 
   // Heartbeat
@@ -89,20 +96,20 @@ export class WebSocketService {
   }
 
   /**
-   * Connect to WebSocket server
+   * Connect to WebSocket server (uses cookies for auth)
    */
-  connect(token: string): Promise<void> {
+  connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.state === ConnectionState.CONNECTED) {
         resolve();
         return;
       }
 
-      this.token = token;
       this.state = ConnectionState.CONNECTING;
 
       try {
-        this.ws = new WebSocket(`${this.url}?token=${token}`);
+        // No token needed - cookies are sent automatically
+        this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
           this.state = ConnectionState.CONNECTED;
@@ -198,7 +205,9 @@ export class WebSocketService {
       this.pendingMessages.set(tempId, {
         resolve,
         reject,
-        threadId
+        threadId,
+        ciphertext: encrypted.ciphertext,
+        iv: encrypted.iv
       });
 
       // Send message
@@ -257,6 +266,16 @@ export class WebSocketService {
     return Array.from(this.subscribedThreads);
   }
 
+  /**
+   * Subscribe to all threads for the current user
+   * This enables automatic discovery of threads from unknown contacts
+   */
+  subscribeToUser(): void {
+    if (this.state === ConnectionState.CONNECTED && this.ws) {
+      this.send({ type: 'subscribe_user' });
+    }
+  }
+
   // ==================== Private Methods ====================
 
   private send(payload: ClientPayload): void {
@@ -309,12 +328,17 @@ export class WebSocketService {
     // Resolve any pending send for this thread
     // Note: The server echoes our own messages back
     if (msg.id && msg.thread_id) {
-      // Find and resolve pending message
-      for (const [tempId, pending] of this.pendingMessages) {
-        if (pending.threadId === msg.thread_id) {
-          this.pendingMessages.delete(tempId);
-          pending.resolve({ id: msg.id });
-          break;
+      if (msg.ciphertext && msg.iv) {
+        for (const [tempId, pending] of this.pendingMessages) {
+          if (
+            pending.threadId === msg.thread_id
+            && pending.ciphertext === msg.ciphertext
+            && pending.iv === msg.iv
+          ) {
+            this.pendingMessages.delete(tempId);
+            pending.resolve({ id: msg.id });
+            return;
+          }
         }
       }
     }
@@ -355,9 +379,7 @@ export class WebSocketService {
     this.notifyConnectionHandlers(false);
 
     this.reconnectTimer = setTimeout(() => {
-      if (this.token) {
-        this.connect(this.token).catch(console.error);
-      }
+      this.connect().catch(console.error);
     }, delay);
   }
 

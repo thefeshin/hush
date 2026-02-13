@@ -1,15 +1,15 @@
 /**
  * Contact state management
- * Contacts are other users' UUIDs with optional metadata
+ * Contacts are other users identified by server-assigned user IDs
  */
 
 import { create } from 'zustand';
 import { saveContact, loadContacts, deleteContact } from '../services/storage';
 import type { EncryptedData } from '../types/crypto';
 
-interface Contact {
-  uuid: string;
-  displayName: string;
+export interface Contact {
+  id: string;        // Server-assigned UUID
+  username: string;  // Display username
   notes?: string;
   addedAt: number;
 }
@@ -21,12 +21,13 @@ interface ContactState {
   // Actions
   loadAllContacts: (decryptFn: (encrypted: EncryptedData) => Promise<any>) => Promise<void>;
   addContact: (
-    uuid: string,
-    displayName: string,
+    id: string,
+    username: string,
     encryptFn: (data: any) => Promise<EncryptedData>
   ) => Promise<void>;
-  removeContact: (uuid: string) => Promise<void>;
-  getContact: (uuid: string) => Contact | undefined;
+  removeContact: (id: string) => Promise<void>;
+  getContact: (id: string) => Contact | undefined;
+  getContactByUsername: (username: string) => Contact | undefined;
 }
 
 export const useContactStore = create<ContactState>((set, get) => ({
@@ -40,18 +41,18 @@ export const useContactStore = create<ContactState>((set, get) => ({
       const stored = await loadContacts();
       const contacts: Contact[] = [];
 
-      for (const { uuid, encrypted } of stored) {
+      for (const { uuid: id, encrypted } of stored) {
         try {
           const data = await decryptFn(encrypted);
           contacts.push({
-            uuid,
-            displayName: data.displayName,
+            id,
+            username: data.username || data.displayName, // Support both old and new format
             notes: data.notes,
             addedAt: data.addedAt
           });
         } catch {
           // Skip contacts that can't be decrypted
-          console.warn(`Failed to decrypt contact ${uuid}`);
+          console.warn(`Failed to decrypt contact ${id}`);
         }
       }
 
@@ -62,46 +63,51 @@ export const useContactStore = create<ContactState>((set, get) => ({
     }
   },
 
-  addContact: async (uuid, displayName, encryptFn) => {
+  addContact: async (id, username, encryptFn) => {
     // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(uuid)) {
-      throw new Error('Invalid UUID format');
+    if (!uuidRegex.test(id)) {
+      throw new Error('Invalid user ID format');
     }
 
     // Check for duplicate
-    if (get().contacts.some(c => c.uuid === uuid)) {
+    if (get().contacts.some(c => c.id === id)) {
       throw new Error('Contact already exists');
     }
 
     const contact: Contact = {
-      uuid,
-      displayName: displayName.trim(),
+      id,
+      username: username.trim(),
       addedAt: Date.now()
     };
 
     // Encrypt and save
     const encrypted = await encryptFn({
-      displayName: contact.displayName,
+      username: contact.username,
       notes: contact.notes,
       addedAt: contact.addedAt
     });
 
-    await saveContact(uuid, encrypted);
+    await saveContact(id, encrypted);
 
     set(state => ({
       contacts: [...state.contacts, contact]
     }));
   },
 
-  removeContact: async (uuid) => {
-    await deleteContact(uuid);
+  removeContact: async (id) => {
+    await deleteContact(id);
     set(state => ({
-      contacts: state.contacts.filter(c => c.uuid !== uuid)
+      contacts: state.contacts.filter(c => c.id !== id)
     }));
   },
 
-  getContact: (uuid) => {
-    return get().contacts.find(c => c.uuid === uuid);
+  getContact: (id) => {
+    return get().contacts.find(c => c.id === id);
+  },
+
+  getContactByUsername: (username) => {
+    const lower = username.toLowerCase();
+    return get().contacts.find(c => c.username.toLowerCase() === lower);
   }
 }));

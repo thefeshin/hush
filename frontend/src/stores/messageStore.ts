@@ -128,7 +128,19 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         const updated = messages.map(m =>
           m.id === tempId ? { ...m, id: realId, status: 'sent' as const } : m
         );
-        newMap.set(threadId, updated);
+
+        const deduped: Message[] = [];
+        const seenIds = new Set<string>();
+        for (let i = updated.length - 1; i >= 0; i -= 1) {
+          const msg = updated[i];
+          if (!seenIds.has(msg.id)) {
+            seenIds.add(msg.id);
+            deduped.push(msg);
+          }
+        }
+
+        deduped.reverse();
+        newMap.set(threadId, deduped);
       }
 
       return { messagesByThread: newMap };

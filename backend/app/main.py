@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
+from app.config import settings, validate_security_settings
 from app.database import init_db, close_db
 from app.routers import auth, threads, messages, health, websocket
 from app.middleware.security import SecurityMiddleware
@@ -21,6 +21,9 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     # Setup logging
     setup_logging()
+
+    # Validate deployment-critical settings before opening connections.
+    validate_security_settings(settings)
 
     # Startup
     await init_db()

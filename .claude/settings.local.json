@@ -3,7 +3,15 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(dir:*)",
-      "Bash(python hush deploy:*)"
+      "Bash(python hush deploy:*)",
+      "Bash(curl:*)",
+      "Bash(docker-compose build --no-cache backend)",
+      "Bash(docker-compose up -d)",
+      "Bash(npm run build)",
+      "Bash(docker-compose build --no-cache frontend backend)",
+      "Bash(docker-compose down)",
+      "Bash(docker-compose ps)",
+      "Bash(docker-compose build --no-cache frontend)"
     ]
   }
 }

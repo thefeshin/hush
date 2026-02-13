@@ -10,17 +10,22 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import get_connection
-from app.dependencies.auth import verify_token
+from app.dependencies.auth import get_current_user, AuthenticatedUser
+from app.security_limits import IV_BYTES, MAX_THREAD_CIPHERTEXT_BYTES
 from app.schemas.thread import ThreadCreate, ThreadResponse, ThreadQuery
+from app.services.authorization import require_thread_participant
+from app.utils.payload_validation import decode_base64_field
 
 router = APIRouter()
 
 
-@router.post("/threads", response_model=ThreadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/threads", response_model=ThreadResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_thread(
     thread: ThreadCreate,
     conn=Depends(get_connection),
-    _=Depends(verify_token)
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
     Create a new thread with encrypted metadata
@@ -31,45 +36,109 @@ async def create_thread(
     This ensures:
     - Same thread_id for both participants
     - Deterministic - no duplicates
-    - Server cannot determine participants
+    - Server cannot read encrypted content
+
+    Participant UUIDs are stored in plaintext (in thread_participants table)
+    to enable thread discovery without decrypting metadata.
     """
-    # Validate base64 encoding
-    try:
-        ciphertext_bytes = base64.b64decode(thread.ciphertext)
-        iv_bytes = base64.b64decode(thread.iv)
-    except Exception:
+    # Require deterministic participant ordering and membership.
+    participants = [str(thread.participant_1), str(thread.participant_2)]
+    if participants[0] == participants[1]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid base64 encoding"
+            detail="participant_1 and participant_2 must be different",
         )
+    if participants != sorted(participants):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Participants must be sorted lexicographically",
+        )
+    if str(user.user_id) not in participants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: user must be one of the thread participants",
+        )
+
+    ciphertext_bytes = decode_base64_field(
+        thread.ciphertext,
+        field_name="ciphertext",
+        max_bytes=MAX_THREAD_CIPHERTEXT_BYTES,
+    )
+    iv_bytes = decode_base64_field(
+        thread.iv,
+        field_name="iv",
+        max_bytes=IV_BYTES,
+        exact_bytes=IV_BYTES,
+    )
 
     # Check if thread already exists
-    existing = await conn.fetchrow("""
+    existing = await conn.fetchrow(
+        """
         SELECT id, ciphertext, iv, created_at
         FROM threads WHERE id = $1
-    """, thread.id)
+    """,
+        thread.id,
+    )
 
     if existing:
-        # Thread exists - just return it (idempotent)
+        participant_row = await conn.fetchrow(
+            """
+            SELECT participant_1, participant_2
+            FROM thread_participants
+            WHERE thread_id = $1
+            """,
+            thread.id,
+        )
+        if not participant_row:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Thread metadata missing for existing thread",
+            )
+
+        stored_participants = sorted(
+            [str(participant_row["participant_1"]), str(participant_row["participant_2"])]
+        )
+        if stored_participants != participants:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Thread participants mismatch for existing thread",
+            )
+
         return ThreadResponse(
             id=existing["id"],
-            ciphertext=base64.b64encode(existing["ciphertext"]).decode('ascii'),
-            iv=base64.b64encode(existing["iv"]).decode('ascii'),
-            created_at=existing["created_at"]
+            ciphertext=base64.b64encode(existing["ciphertext"]).decode("ascii"),
+            iv=base64.b64encode(existing["iv"]).decode("ascii"),
+            created_at=existing["created_at"],
         )
 
-    # Create new thread
-    row = await conn.fetchrow("""
-        INSERT INTO threads (id, ciphertext, iv)
-        VALUES ($1, $2, $3)
-        RETURNING id, ciphertext, iv, created_at
-    """, thread.id, ciphertext_bytes, iv_bytes)
+    # Create new thread with participant record
+    async with conn.transaction():
+        row = await conn.fetchrow(
+            """
+            INSERT INTO threads (id, ciphertext, iv)
+            VALUES ($1, $2, $3)
+            RETURNING id, ciphertext, iv, created_at
+        """,
+            thread.id,
+            ciphertext_bytes,
+            iv_bytes,
+        )
+
+        await conn.execute(
+            """
+            INSERT INTO thread_participants (thread_id, participant_1, participant_2)
+            VALUES ($1, $2, $3)
+        """,
+            thread.id,
+            thread.participant_1,
+            thread.participant_2,
+        )
 
     return ThreadResponse(
         id=row["id"],
-        ciphertext=base64.b64encode(row["ciphertext"]).decode('ascii'),
-        iv=base64.b64encode(row["iv"]).decode('ascii'),
-        created_at=row["created_at"]
+        ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
+        iv=base64.b64encode(row["iv"]).decode("ascii"),
+        created_at=row["created_at"],
     )
 
 
@@ -77,7 +146,7 @@ async def create_thread(
 async def query_threads(
     query: ThreadQuery,
     conn=Depends(get_connection),
-    _=Depends(verify_token)
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
     Query threads by their IDs
@@ -90,47 +159,81 @@ async def query_threads(
     if not query.thread_ids:
         return []
 
-    rows = await conn.fetch("""
-        SELECT id, ciphertext, iv, created_at
-        FROM threads
-        WHERE id = ANY($1)
-        ORDER BY created_at DESC
-    """, query.thread_ids)
+    rows = await conn.fetch(
+        """
+        SELECT t.id, t.ciphertext, t.iv, t.created_at
+        FROM threads t
+        JOIN thread_participants tp ON tp.thread_id = t.id
+        WHERE t.id = ANY($1)
+          AND (tp.participant_1 = $2 OR tp.participant_2 = $2)
+        ORDER BY t.created_at DESC
+    """,
+        query.thread_ids,
+        user.user_id,
+    )
 
     return [
         ThreadResponse(
             id=row["id"],
-            ciphertext=base64.b64encode(row["ciphertext"]).decode('ascii'),
-            iv=base64.b64encode(row["iv"]).decode('ascii'),
-            created_at=row["created_at"]
+            ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
+            iv=base64.b64encode(row["iv"]).decode("ascii"),
+            created_at=row["created_at"],
         )
         for row in rows
     ]
+
+
+@router.get("/threads/discover")
+async def discover_threads(
+    user: AuthenticatedUser = Depends(get_current_user), conn=Depends(get_connection)
+):
+    """
+    Discover all threads where the authenticated user is a participant.
+
+    Returns thread_ids only - client must handle decryption/loading.
+    This allows users to discover new threads from unknown contacts.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT thread_id
+        FROM thread_participants
+        WHERE participant_1 = $1 OR participant_2 = $2
+        ORDER BY created_at DESC
+    """,
+        user.user_id,
+        user.user_id,
+    )
+
+    return {"thread_ids": [str(row["thread_id"]) for row in rows]}
 
 
 @router.get("/threads/{thread_id}", response_model=ThreadResponse)
 async def get_thread(
     thread_id: UUID,
     conn=Depends(get_connection),
-    _=Depends(verify_token)
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Get a specific thread by ID"""
-    row = await conn.fetchrow("""
+    await require_thread_participant(conn, thread_id, user.user_id)
+
+    row = await conn.fetchrow(
+        """
         SELECT id, ciphertext, iv, created_at
         FROM threads WHERE id = $1
-    """, thread_id)
+    """,
+        thread_id,
+    )
 
     if not row:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thread not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found"
         )
 
     return ThreadResponse(
         id=row["id"],
-        ciphertext=base64.b64encode(row["ciphertext"]).decode('ascii'),
-        iv=base64.b64encode(row["iv"]).decode('ascii'),
-        created_at=row["created_at"]
+        ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
+        iv=base64.b64encode(row["iv"]).decode("ascii"),
+        created_at=row["created_at"],
     )
 
 
@@ -138,25 +241,15 @@ async def get_thread(
 async def delete_thread(
     thread_id: UUID,
     conn=Depends(get_connection),
-    _=Depends(verify_token)
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Delete a thread and all its messages"""
+    await require_thread_participant(conn, thread_id, user.user_id)
+
     async with conn.transaction():
         # Delete messages first
-        await conn.execute(
-            "DELETE FROM messages WHERE thread_id = $1",
-            thread_id
-        )
+        await conn.execute("DELETE FROM messages WHERE thread_id = $1", thread_id)
         # Delete thread
-        result = await conn.execute(
-            "DELETE FROM threads WHERE id = $1",
-            thread_id
-        )
-
-    if result == "DELETE 0":
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thread not found"
-        )
+        await conn.execute("DELETE FROM threads WHERE id = $1", thread_id)
 
     return {"status": "deleted"}

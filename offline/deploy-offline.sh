@@ -1,134 +1,249 @@
 #!/bin/bash
 # HUSH Offline Deployment Script
-# Run this on an AIR-GAPPED machine (no internet required)
-# Prerequisites: .env file must already exist (generated during build phase)
+# Run this on an AIR-GAPPED machine (no internet required).
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-echo ""
-echo "============================================"
-echo "  HUSH Offline Deployment"
-echo "============================================"
-echo ""
+TARGET_CODENAME=""
+TARGET_ID=""
+BUNDLE_DIR=""
+BUNDLE_PATH=""
 
-# Check Docker is available
-if ! command -v docker &> /dev/null; then
-    echo "[ERROR] Docker is not installed or not in PATH"
-    exit 1
-fi
-
-# Check Docker is running
-if ! docker info &> /dev/null; then
-    echo "[ERROR] Docker daemon is not running"
-    exit 1
-fi
-
-cd "$PROJECT_ROOT"
-
-# Step 1: Verify all required files exist
-echo "[1/3] Verifying required files..."
-
-MISSING=()
-
-check_file() {
-    local file=$1
-    local desc=$2
-    if [[ -f "$PROJECT_ROOT/$file" ]]; then
-        echo "  [OK] $file"
-    else
-        echo "  [MISSING] $file - $desc"
-        MISSING+=("$file")
-    fi
+print_header() {
+  echo ""
+  echo "============================================"
+  echo "  HUSH Offline Deployment"
+  echo "============================================"
+  echo ""
 }
 
-check_file ".env" "secrets (generated during build)"
-check_file "docker-compose.yml" "service definitions"
-check_file "nginx/nginx.conf" "nginx configuration"
-check_file "nginx/ssl/cert.pem" "SSL certificate"
-check_file "nginx/ssl/key.pem" "SSL private key"
+fail() {
+  echo "[ERROR] $*" >&2
+  exit 1
+}
 
-if [[ ${#MISSING[@]} -gt 0 ]]; then
-    echo ""
-    echo "[ERROR] Missing required files!"
-    echo ""
-    echo "These files must be copied from the build machine:"
-    for file in "${MISSING[@]}"; do
-        echo "  - $file"
-    done
-    echo ""
-    echo "Run build-bundle.sh on a machine with internet first."
-    exit 1
-fi
+detect_target_bundle() {
+  [[ -f /etc/os-release ]] || fail "/etc/os-release not found"
+  # shellcheck source=/etc/os-release
+  . /etc/os-release
 
-# Step 2: Load Docker images from bundle
-echo ""
-echo "[2/3] Loading Docker images from bundle..."
+  local arch
+  arch="$(dpkg --print-architecture 2>/dev/null || true)"
 
-BUNDLE_PATH="$SCRIPT_DIR/hush-offline-bundle.tar"
+  [[ "${ID:-}" == "ubuntu" ]] || fail "Unsupported distribution: ${ID:-unknown}. Expected ubuntu."
+  [[ "$arch" == "amd64" ]] || fail "Unsupported architecture: ${arch:-unknown}. Expected amd64."
 
-if [[ ! -f "$BUNDLE_PATH" ]]; then
-    echo "[ERROR] Bundle not found: $BUNDLE_PATH"
-    echo ""
-    echo "Copy hush-offline-bundle.tar to the offline/ directory"
-    exit 1
-fi
+  TARGET_CODENAME="${VERSION_CODENAME:-}"
+  case "$TARGET_CODENAME" in
+    jammy|noble) ;;
+    *) fail "Unsupported Ubuntu codename: ${TARGET_CODENAME:-unknown}. Supported: jammy, noble." ;;
+  esac
 
-SIZE_MB=$(du -m "$BUNDLE_PATH" | cut -f1)
-echo "  Loading ${SIZE_MB} MB bundle (this may take a few minutes)..."
+  TARGET_ID="${TARGET_CODENAME}-amd64"
+  BUNDLE_DIR="$SCRIPT_DIR/bundles/$TARGET_ID"
+  BUNDLE_PATH="$BUNDLE_DIR/hush-offline-bundle.tar"
+}
 
-docker load -i "$BUNDLE_PATH"
+preflight_runtime() {
+  local runtime_ok=true
 
-echo "[OK] Images loaded successfully"
+  echo "[1/7] Checking runtime prerequisites..."
 
-# Step 3: Start services
-echo ""
-echo "[3/3] Starting HUSH services..."
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "  [MISSING] docker"
+    runtime_ok=false
+  else
+    echo "  [OK] docker found"
+  fi
 
-# Stop any existing containers
-docker-compose down 2>/dev/null || true
+  if [[ "$runtime_ok" != true ]]; then
+    fail "Install offline dependencies first: bash ./offline/install-system-deps.sh"
+  fi
 
-# Start services
-docker-compose up -d
+  if ! docker info >/dev/null 2>&1; then
+    fail "Docker daemon is not running. Start Docker and retry."
+  fi
 
-# Wait for services to initialize
-echo "  Waiting for services to initialize..."
-sleep 8
+  echo "[OK] Runtime prerequisites satisfied"
+}
 
-# Check health
-echo "  Checking service health..."
+verify_bundle() {
+  local size_mb
 
-HEALTHY=true
+  echo ""
+  echo "[2/7] Checking target bundle..."
 
-for svc in postgres backend nginx; do
-    STATUS=$(docker-compose ps "$svc" --format "{{.Status}}" 2>/dev/null || echo "unknown")
-    if [[ "$STATUS" =~ Up|running|healthy ]]; then
-        echo "  [OK] $svc"
+  [[ -d "$BUNDLE_DIR" ]] || fail "Missing bundle directory: $BUNDLE_DIR"
+  [[ -f "$BUNDLE_PATH" ]] || fail "Missing Docker image bundle: $BUNDLE_PATH"
+  [[ -f "$BUNDLE_DIR/SHA256SUMS" ]] || fail "Missing checksum file: $BUNDLE_DIR/SHA256SUMS"
+
+  size_mb="$(du -m "$BUNDLE_PATH" | cut -f1)"
+  echo "[OK] Found image bundle for $TARGET_ID (${size_mb} MB)"
+}
+
+verify_required_files() {
+  echo ""
+  echo "[3/7] Verifying required deployment files..."
+
+  local missing=()
+  local required=(
+    "docker-compose.yml"
+    "nginx/nginx.conf"
+    "offline/install-system-deps.sh"
+    "offline/init-airgap-env.sh"
+  )
+
+  local path
+  for path in "${required[@]}"; do
+    if [[ -f "$PROJECT_ROOT/$path" ]]; then
+      echo "  [OK] $path"
     else
-        echo "  [WARN] $svc - $STATUS"
-        HEALTHY=false
+      echo "  [MISSING] $path"
+      missing+=("$path")
     fi
-done
+  done
 
-echo ""
-if $HEALTHY; then
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    fail "Missing required deployment files: ${missing[*]}"
+  fi
+}
+
+verify_integrity() {
+  echo ""
+  echo "[4/7] Verifying bundle checksums..."
+
+  (
+    cd "$BUNDLE_DIR"
+    sha256sum -c "SHA256SUMS"
+  )
+
+  echo "[OK] Bundle checksums verified"
+}
+
+verify_env_present() {
+  echo ""
+  echo "[5/7] Verifying .env presence and required keys..."
+
+  if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
+    echo "[ERROR] .env is mandatory and was not found at $PROJECT_ROOT/.env"
+    echo "Create .env on this air-gapped machine now:"
+    echo "  bash ./offline/init-airgap-env.sh"
+    fail "Deployment stopped because .env is missing"
+  fi
+
+  local key
+  local missing=()
+  for key in AUTH_HASH KDF_SALT JWT_SECRET; do
+    if ! grep -q "^${key}=" "$PROJECT_ROOT/.env"; then
+      missing+=("$key")
+    fi
+  done
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "[ERROR] .env exists but is missing required keys: ${missing[*]}"
+    echo "Recreate .env on this air-gapped machine:"
+    echo "  bash ./offline/init-airgap-env.sh --rotate-secrets"
+    fail "Deployment stopped because .env is invalid"
+  fi
+
+  echo "[OK] .env is present and valid"
+}
+
+ensure_ssl() {
+  local ssl_dir cert_path key_path
+  ssl_dir="$PROJECT_ROOT/nginx/ssl"
+  cert_path="$ssl_dir/cert.pem"
+  key_path="$ssl_dir/key.pem"
+
+  echo ""
+  echo "[6/7] Ensuring SSL certificates..."
+
+  mkdir -p "$ssl_dir"
+  if [[ -f "$cert_path" && -f "$key_path" ]]; then
+    echo "[OK] SSL certificates already exist"
+    return
+  fi
+
+  command -v openssl >/dev/null 2>&1 || fail "openssl not found and nginx SSL certs are missing"
+
+  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout "$key_path" \
+    -out "$cert_path" \
+    -subj "/CN=localhost/O=HUSH/C=US" >/dev/null 2>&1
+
+  echo "[OK] SSL certificates generated (valid 10 years)"
+}
+
+load_images_and_start() {
+  local healthy=true
+  local svc status
+
+  echo ""
+  echo "[7/7] Loading Docker images and starting services..."
+
+  docker load -i "$BUNDLE_PATH"
+  echo "[OK] Images loaded"
+
+  if [[ -f "$PROJECT_ROOT/docker-compose.override.yml" ]]; then
+    echo "[INFO] Ignoring docker-compose.override.yml for air-gapped deploy"
+  fi
+
+  docker compose -f docker-compose.yml down >/dev/null 2>&1 || true
+  docker compose -f docker-compose.yml up -d
+
+  echo "  Waiting for services to initialize..."
+  sleep 8
+
+  for svc in postgres backend nginx; do
+    status="$(docker compose -f docker-compose.yml ps "$svc" --format "{{.Status}}" 2>/dev/null || echo "unknown")"
+    if [[ "$status" =~ Up|running|healthy ]]; then
+      echo "  [OK] $svc"
+    else
+      echo "  [WARN] $svc - $status"
+      healthy=false
+    fi
+  done
+
+  echo ""
+  if [[ "$healthy" == true ]]; then
     echo "============================================"
     echo "  HUSH Deployed Successfully!"
     echo "============================================"
-else
+  else
     echo "============================================"
     echo "  HUSH Started (some services may need time)"
     echo "============================================"
-fi
+  fi
 
-echo ""
-echo "  Access your vault at: https://localhost"
-echo ""
-echo "  Commands:"
-echo "    View logs:     docker-compose logs -f"
-echo "    Stop:          docker-compose down"
-echo "    Restart:       docker-compose restart"
-echo "    Check status:  docker-compose ps"
-echo ""
+  echo ""
+  echo "Access your vault at: https://localhost"
+  echo ""
+  echo "Commands:"
+  echo "  View logs:     docker compose -f docker-compose.yml logs -f"
+  echo "  Stop:          docker compose -f docker-compose.yml down"
+  echo "  Restart:       docker compose -f docker-compose.yml restart"
+  echo "  Check status:  docker compose -f docker-compose.yml ps"
+  echo ""
+}
+
+main() {
+  if [[ $# -gt 0 ]]; then
+    fail "deploy-offline.sh does not accept arguments. Use deploy-airgapped.sh for orchestration."
+  fi
+
+  print_header
+  cd "$PROJECT_ROOT"
+  detect_target_bundle
+  preflight_runtime
+  verify_bundle
+  verify_required_files
+  verify_integrity
+  verify_env_present
+  ensure_ssl
+  load_images_and_start
+}
+
+main "$@"

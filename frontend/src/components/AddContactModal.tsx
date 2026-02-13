@@ -1,59 +1,94 @@
 /**
- * Modal for adding a new contact by UUID
+ * Modal for adding a new contact by username
  */
 
 import React, { useState } from 'react';
 import { useContactStore } from '../stores/contactStore';
 import { useAuthStore } from '../stores/authStore';
 import { useCrypto } from '../crypto/CryptoContext';
+import { lookupUser } from '../services/api';
 
 interface Props {
   onClose: () => void;
 }
 
 export function AddContactModal({ onClose }: Props) {
-  const [uuid, setUuid] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [foundUser, setFoundUser] = useState<{ id: string; username: string } | null>(null);
 
-  const identity = useAuthStore(state => state.identity);
-  const { addContact } = useContactStore();
+  const user = useAuthStore(state => state.user);
+  const { addContact, getContact } = useContactStore();
   const { encryptContacts } = useCrypto();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setFoundUser(null);
 
-    const trimmedUuid = uuid.trim().toLowerCase();
-    const trimmedName = displayName.trim();
+    const trimmedUsername = username.trim().toLowerCase();
 
-    // Validate
-    if (!trimmedUuid) {
-      setError('Please enter a UUID');
+    if (!trimmedUsername) {
+      setError('Please enter a username');
       return;
     }
 
-    if (!trimmedName) {
-      setError('Please enter a display name');
+    if (trimmedUsername.length < 3) {
+      setError('Username must be at least 3 characters');
       return;
     }
 
     // Check if trying to add self
-    if (trimmedUuid === identity?.userId) {
+    if (trimmedUsername === user?.username?.toLowerCase()) {
       setError("You can't add yourself as a contact");
       return;
     }
 
-    setIsAdding(true);
+    setIsSearching(true);
 
     try {
-      await addContact(trimmedUuid, trimmedName, encryptContacts);
+      const result = await lookupUser(trimmedUsername);
+
+      if (!result.found || !result.user) {
+        setError('User not found');
+        return;
+      }
+
+      // Check if already a contact
+      if (getContact(result.user.id)) {
+        setError('Already in your contacts');
+        return;
+      }
+
+      setFoundUser(result.user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Search failed');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleAdd = async () => {
+    if (!foundUser) return;
+
+    setIsAdding(true);
+    setError(null);
+
+    try {
+      await addContact(foundUser.id, foundUser.username, encryptContacts);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add contact');
       setIsAdding(false);
     }
+  };
+
+  const handleReset = () => {
+    setFoundUser(null);
+    setUsername('');
+    setError(null);
   };
 
   return (
@@ -64,58 +99,83 @@ export function AddContactModal({ onClose }: Props) {
           <button className="close-button" onClick={onClose}>&times;</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label htmlFor="uuid">Their UUID</label>
-            <input
-              id="uuid"
-              type="text"
-              value={uuid}
-              onChange={e => setUuid(e.target.value)}
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              autoFocus
-              disabled={isAdding}
-            />
-            <p className="input-hint">
-              Ask them to share their UUID from their profile
-            </p>
-          </div>
+        {!foundUser ? (
+          <form onSubmit={handleSearch}>
+            <div className="input-group">
+              <label htmlFor="username">Username</label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="Enter their username"
+                autoFocus
+                disabled={isSearching}
+                autoCapitalize="off"
+              />
+              <p className="input-hint">
+                Enter the username of the person you want to add
+              </p>
+            </div>
 
-          <div className="input-group">
-            <label htmlFor="name">Display Name</label>
-            <input
-              id="name"
-              type="text"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-              placeholder="What should we call them?"
-              maxLength={50}
-              disabled={isAdding}
-            />
-          </div>
+            {error && (
+              <div className="error-message">{error}</div>
+            )}
 
-          {error && (
-            <div className="error-message">{error}</div>
-          )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={onClose}
+                disabled={isSearching}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={isSearching || !username.trim()}
+              >
+                {isSearching ? 'Searching...' : 'Search'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="found-user">
+            <div className="user-info">
+              <div className="user-avatar">
+                {foundUser.username.charAt(0).toUpperCase()}
+              </div>
+              <div className="user-details">
+                <span className="user-name">{foundUser.username}</span>
+                <span className="user-id">{foundUser.id.slice(0, 8)}...</span>
+              </div>
+            </div>
 
-          <div className="modal-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={onClose}
-              disabled={isAdding}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="primary-button"
-              disabled={isAdding || !uuid.trim() || !displayName.trim()}
-            >
-              {isAdding ? 'Adding...' : 'Add Contact'}
-            </button>
+            {error && (
+              <div className="error-message">{error}</div>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleReset}
+                disabled={isAdding}
+              >
+                Search Again
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleAdd}
+                disabled={isAdding}
+              >
+                {isAdding ? 'Adding...' : 'Add Contact'}
+              </button>
+            </div>
           </div>
-        </form>
+        )}
       </div>
     </div>
   );

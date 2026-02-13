@@ -5,70 +5,56 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
-import { useThreadStore } from '../stores/threadStore';
+import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { saveMessage } from '../services/storage';
-import { queueMessage, processQueue } from '../services/messageQueue';
+import { queueMessage } from '../services/messageQueue';
 import type { MessagePayload } from '../types/crypto';
 
 interface Props {
-  threadId: string;
-  participantUUID: string;
+  conversationId: string;
+  participantId: string;
 }
 
-export function MessageComposer({ threadId, participantUUID }: Props) {
+export function MessageComposer({ conversationId, participantId }: Props) {
   const [content, setContent] = useState('');
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const identity = useAuthStore(state => state.identity);
+  const user = useAuthStore(state => state.user);
   const { addPendingMessage, markMessageSent, markMessageFailed } = useMessageStore();
-  const { updateLastMessage } = useThreadStore();
+  const { updateLastMessage } = useConversationStore();
   const { getThreadKey, encryptMessage } = useCrypto();
   const { sendMessage, isConnected } = useWebSocket();
 
-  // Focus input on mount and when thread changes
+  // Focus input on mount and when conversation changes.
   useEffect(() => {
     inputRef.current?.focus();
-  }, [threadId]);
-
-  // Process queue when connection is restored
-  useEffect(() => {
-    if (isConnected) {
-      processQueue(sendMessage).then(({ sent, failed }) => {
-        if (sent > 0) {
-          console.log(`Sent ${sent} queued messages`);
-        }
-        if (failed > 0) {
-          console.warn(`Failed to send ${failed} queued messages`);
-        }
-      }).catch(console.error);
-    }
-  }, [isConnected, sendMessage]);
+  }, [conversationId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const trimmedContent = content.trim();
-    if (!trimmedContent || !identity || isSending) return;
+    if (!trimmedContent || !user || isSending) return;
 
     setIsSending(true);
     setContent('');
 
     // Add pending message immediately (optimistic UI)
     const tempId = addPendingMessage(
-      threadId,
+      conversationId,
       trimmedContent,
-      identity.userId,
-      identity.displayName
+      user.id,
+      user.username
     );
 
     try {
       // Create message payload
       const payload: MessagePayload = {
-        sender_id: identity.userId,
-        sender_name: identity.displayName,
+        sender_id: user.id,
+        sender_name: user.username,
         content: trimmedContent,
         timestamp: Date.now()
       };
@@ -76,30 +62,30 @@ export function MessageComposer({ threadId, participantUUID }: Props) {
       const payloadString = JSON.stringify(payload);
 
       // Get thread key and encrypt
-      const threadKey = await getThreadKey(identity.userId, participantUUID);
+      const threadKey = await getThreadKey(user.id, participantId);
       const encrypted = await encryptMessage(threadKey, payloadString);
 
       if (isConnected) {
         // Send via WebSocket
-        const result = await sendMessage(threadId, encrypted);
+        const result = await sendMessage(conversationId, encrypted);
 
         // Save to local storage
-        await saveMessage(result.id, threadId, encrypted, payload.timestamp);
+        await saveMessage(result.id, conversationId, encrypted, payload.timestamp);
 
         // Update message with real ID
         markMessageSent(tempId, result.id);
       } else {
         // Queue for later when offline
-        const queuedId = await queueMessage(threadId, encrypted, payloadString);
+        await queueMessage(conversationId, tempId, encrypted);
 
-        // Save to local storage with queued ID
-        await saveMessage(queuedId, threadId, encrypted, payload.timestamp);
+        // Save to local storage with the same temporary ID for deterministic replay reconciliation
+        await saveMessage(tempId, conversationId, encrypted, payload.timestamp);
 
-        // Mark as sent (but queued)
-        markMessageSent(tempId, queuedId);
+        // Mark as queued-sent in UI while waiting for server reconciliation
+        markMessageSent(tempId, tempId);
       }
 
-      updateLastMessage(threadId, Date.now());
+      updateLastMessage(conversationId, Date.now());
     } catch (err) {
       console.error('Failed to send message', err);
       markMessageFailed(tempId);

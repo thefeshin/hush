@@ -8,6 +8,7 @@ import { deriveVaultKey, clearKeyMaterial } from './kdf';
 import { deriveThreadKey, computeThreadId } from './thread-key';
 import { deriveIdentityKey, deriveContactsKey } from './identity-key';
 import { encrypt, decrypt, encryptJSON, decryptJSON } from './aes';
+import { clearStoredVaultKey, clearSessionVaultKey } from '../services/vaultStorage';
 import type { VaultKey, ThreadKey, EncryptedData } from '../types/crypto';
 
 interface CryptoContextValue {
@@ -16,7 +17,8 @@ interface CryptoContextValue {
 
   // Vault operations
   unlockVault: (words: string, salt: string) => Promise<void>;
-  lockVault: () => void;
+  unlockVaultWithKey: (key: VaultKey | CryptoKey) => Promise<void>;
+  lockVault: (options?: { clearStoredKey?: boolean }) => Promise<void>;
 
   // Thread key operations
   getThreadKey: (myUUID: string, otherUUID: string) => Promise<ThreadKey>;
@@ -62,8 +64,29 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     console.log('[CryptoContext] Vault unlocked, isUnlocked = true');
   }, []);
 
+  // Unlock vault with VaultKey (for PIN unlock)
+  const unlockVaultWithKey = useCallback(async (vaultKeyInput: VaultKey | CryptoKey) => {
+    console.log('[CryptoContext] Unlocking vault with key...');
+    const vaultKey: VaultKey = 'key' in vaultKeyInput && 'raw' in vaultKeyInput
+      ? vaultKeyInput
+      : { key: vaultKeyInput, raw: new Uint8Array() };
+    const idKey = await deriveIdentityKey(vaultKey);
+    const ctKey = await deriveContactsKey(vaultKey);
+    setVaultKey(vaultKey);
+    setIdentityKey(idKey);
+    setContactsKey(ctKey);
+    console.log('[CryptoContext] Vault unlocked with key, isUnlocked = true');
+  }, []);
+
   // Lock vault and clear keys
-  const lockVault = useCallback(() => {
+  const lockVault = useCallback(async (options?: { clearStoredKey?: boolean }) => {
+    // Keep PIN-protected stored key by default on lock.
+    if (options?.clearStoredKey) {
+      await clearStoredVaultKey();
+    }
+    // Clear session cache
+    clearSessionVaultKey();
+    // Clear keys from memory
     if (vaultKey) {
       clearKeyMaterial(vaultKey.raw);
     }
@@ -169,9 +192,23 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     };
   }, [vaultKey]);
 
+  // Listen for unlock-vault custom event (from App.tsx)
+  useEffect(() => {
+    const handleUnlockVault = (event: CustomEvent<VaultKey | CryptoKey>) => {
+      unlockVaultWithKey(event.detail);
+    };
+
+    window.addEventListener('unlock-vault', handleUnlockVault as EventListener);
+
+    return () => {
+      window.removeEventListener('unlock-vault', handleUnlockVault as EventListener);
+    };
+  }, [unlockVaultWithKey]);
+
   const value: CryptoContextValue = {
     isUnlocked,
     unlockVault,
+    unlockVaultWithKey,
     lockVault,
     getThreadKey,
     getThreadId,

@@ -6,6 +6,7 @@
 const CACHE_NAME = 'hush-v1';
 const STATIC_CACHE = 'hush-static-v1';
 const DYNAMIC_CACHE = 'hush-dynamic-v1';
+const PRECACHE_MANIFEST = self.__WB_MANIFEST || [];
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
@@ -15,6 +16,12 @@ const STATIC_ASSETS = [
   '/icon-192.png',
   '/icon-512.png'
 ];
+
+for (const asset of PRECACHE_MANIFEST) {
+  if (asset && typeof asset.url === 'string' && !STATIC_ASSETS.includes(asset.url)) {
+    STATIC_ASSETS.push(asset.url);
+  }
+}
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
@@ -71,10 +78,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip API calls (except auth/salt which can be cached)
-  if (url.pathname.startsWith('/api/') && !url.pathname.includes('/auth/salt')) {
-    // Network-first for API calls
-    event.respondWith(networkFirst(request));
+  // Never cache authenticated API responses.
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(networkOnly(request));
     return;
   }
 
@@ -127,6 +133,20 @@ async function networkFirst(request) {
     if (cached) {
       return cached;
     }
+    return new Response(JSON.stringify({ error: 'offline' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+/**
+ * Network-only strategy for authenticated endpoints.
+ */
+async function networkOnly(request) {
+  try {
+    return await fetch(request);
+  } catch (_error) {
     return new Response(JSON.stringify({ error: 'offline' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' }

@@ -193,6 +193,19 @@ export async function loadThreads(): Promise<Array<{ threadId: string; encrypted
   }));
 }
 
+/**
+ * Load a single thread by ID
+ */
+export async function loadThread(threadId: string): Promise<{ encrypted: EncryptedData; lastMessageAt: number } | null> {
+  const record = await getDB().get('threads', threadId);
+  if (!record) return null;
+
+  return {
+    encrypted: { ciphertext: record.ciphertext, iv: record.iv },
+    lastMessageAt: record.lastMessageAt
+  };
+}
+
 // ==================== Message Operations ====================
 
 /**
@@ -211,6 +224,30 @@ export async function saveMessage(
     iv: encrypted.iv,
     createdAt
   });
+}
+
+/**
+ * Replace a local message ID with the canonical server ID.
+ */
+export async function replaceMessageId(oldId: string, newId: string): Promise<void> {
+  if (oldId === newId) {
+    return;
+  }
+
+  const database = getDB();
+  const record = await database.get('messages', oldId);
+  if (!record) {
+    return;
+  }
+
+  const existing = await database.get('messages', newId);
+  if (existing) {
+    await database.delete('messages', oldId);
+    return;
+  }
+
+  await database.put('messages', { ...record, id: newId });
+  await database.delete('messages', oldId);
 }
 
 /**

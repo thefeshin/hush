@@ -4,9 +4,11 @@ Handles connection pool and message broadcasting
 """
 
 import asyncio
-from typing import Dict, Set
+from collections import deque
+from typing import Deque, Dict, Set
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from time import monotonic
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
@@ -19,6 +21,7 @@ class Connection:
     connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     subscribed_threads: Set[str] = field(default_factory=set)
     last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    message_timestamps: Deque[float] = field(default_factory=deque)
 
 
 class WebSocketManager:
@@ -128,6 +131,52 @@ class WebSocketManager:
             connection = self._connections.get(websocket)
             if connection:
                 connection.last_activity = datetime.now(timezone.utc)
+
+    async def is_subscribed_to_thread(self, websocket: WebSocket, thread_id: str) -> bool:
+        """Check whether a connection is already subscribed to a thread."""
+        async with self._lock:
+            connection = self._connections.get(websocket)
+            if not connection:
+                return False
+            return thread_id in connection.subscribed_threads
+
+    async def get_subscription_count(self, websocket: WebSocket) -> int:
+        """Return current subscription count for a connection."""
+        async with self._lock:
+            connection = self._connections.get(websocket)
+            if not connection:
+                return 0
+            return len(connection.subscribed_threads)
+
+    async def allow_incoming_message(
+        self,
+        websocket: WebSocket,
+        *,
+        max_messages: int,
+        window_seconds: int,
+    ) -> bool:
+        """
+        Sliding-window per-connection message rate guard.
+
+        Returns True if message is allowed, False if over limit.
+        """
+        now = monotonic()
+        cutoff = now - float(window_seconds)
+
+        async with self._lock:
+            connection = self._connections.get(websocket)
+            if not connection:
+                return False
+
+            while connection.message_timestamps and connection.message_timestamps[0] < cutoff:
+                connection.message_timestamps.popleft()
+
+            if len(connection.message_timestamps) >= max_messages:
+                return False
+
+            connection.message_timestamps.append(now)
+            connection.last_activity = datetime.now(timezone.utc)
+            return True
 
     @property
     def connection_count(self) -> int:

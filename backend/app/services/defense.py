@@ -170,13 +170,20 @@ class DefenseService:
         """
         log_db_wipe()
 
-        # Drop all user data
-        await self.conn.execute("TRUNCATE TABLE messages CASCADE")
-        await self.conn.execute("TRUNCATE TABLE threads CASCADE")
-
-        # Optionally clear security tables too
-        await self.conn.execute("TRUNCATE TABLE blocked_ips")
-        await self.conn.execute("TRUNCATE TABLE auth_failures")
+        # Drop all user and security data in one transaction-safe operation.
+        await self.conn.execute(
+            """
+            TRUNCATE TABLE
+                messages,
+                thread_participants,
+                threads,
+                refresh_tokens,
+                users,
+                blocked_ips,
+                auth_failures
+            RESTART IDENTITY CASCADE
+            """
+        )
 
     async def _execute_panic_mode(self):
         """
