@@ -3,6 +3,7 @@
  */
 
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useMessageStore } from '../stores/messageStore';
@@ -18,9 +19,10 @@ interface Props {
 
 export function ConversationView({ conversationId }: Props) {
   const user = useAuthStore(state => state.user);
-  const { getConversation } = useConversationStore();
+  const { getConversation, setActiveConversation } = useConversationStore();
   const { loadMessagesForConversation, getMessages } = useMessageStore();
   const { getConversationKey, decryptMessage } = useCrypto();
+  const navigate = useNavigate();
 
   const conversation = getConversation(conversationId);
   const messages = getMessages(conversationId);
@@ -55,6 +57,17 @@ export function ConversationView({ conversationId }: Props) {
   return (
     <div className="conversation-view">
       <div className="conversation-header">
+        <button
+          type="button"
+          className="conversation-back-button"
+          onClick={() => {
+            setActiveConversation(null);
+            navigate('/conversation');
+          }}
+          aria-label="Back to conversations"
+        >
+          &lt;
+        </button>
         <div className="conversation-avatar large">
           {conversation.participantUsername[0].toUpperCase()}
         </div>

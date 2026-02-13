@@ -22,6 +22,7 @@ export function Chat() {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
   const [hasDiscovered, setHasDiscovered] = useState(false);
+  const isConversationRoute = Boolean(username);
 
   // Load contacts on mount
   useEffect(() => {
@@ -91,7 +92,7 @@ export function Chat() {
   }
 
   return (
-    <div className="chat-container">
+    <div className={`chat-container ${isConversationRoute ? 'mobile-conversation-open' : ''}`}>
       <Sidebar />
       <main className="chat-main">
         {activeConversationId ? (

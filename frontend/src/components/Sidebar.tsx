@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useContactStore, Contact } from '../stores/contactStore';
 import { useConversationStore } from '../stores/conversationStore';
@@ -24,11 +24,9 @@ export function Sidebar() {
   const { lockVault } = useCrypto();
   const { disconnect } = useWebSocket();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const { conversations, activeConversationId, setActiveConversation } = useConversationStore();
   const { contacts } = useContactStore();
-  const isInboxActive = location.pathname === '/conversation' || location.pathname === '/conversation/inbox';
 
   const handleLogout = async () => {
     disconnect();
@@ -111,20 +109,6 @@ export function Sidebar() {
       <div className="sidebar-content">
         {activeTab === 'chats' && (
           <div className="conversation-list">
-            <div
-              className={`conversation-item ${isInboxActive ? 'active' : ''}`}
-              onClick={() => {
-                setActiveConversation(null);
-                navigate('/conversation');
-              }}
-            >
-              <div className="conversation-avatar">#</div>
-              <div className="conversation-info">
-                <div className="conversation-name">Inbox</div>
-                <div className="conversation-time">All conversations</div>
-              </div>
-            </div>
-
             {conversations.length === 0 ? (
               <div className="empty-list">
                 <p>No conversations yet</p>
