@@ -24,7 +24,7 @@ interface QueueDBSchema extends DBSchema {
 }
 
 const DB_NAME = 'hush-queue';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let db: IDBPDatabase<QueueDBSchema> | null = null;
 

@@ -50,7 +50,7 @@ interface HushDBSchema extends DBSchema {
 }
 
 const DB_NAME = 'hush-vault';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let db: IDBPDatabase<HushDBSchema> | null = null;
 
@@ -71,23 +71,24 @@ export async function initDatabase(): Promise<void> {
         contactStore.createIndex('by-added', 'addedAt');
       }
 
-      // Clean reset: remove legacy store and use conversations store
-      const legacyConversationStore = 'legacy_conversations_v1';
-      if (database.objectStoreNames.contains(legacyConversationStore as any)) {
-        database.deleteObjectStore(legacyConversationStore as any);
+      // Clean reset on pre-release schema changes.
+      // Keep identity and contacts, reset conversation/message history stores.
+      if (database.objectStoreNames.contains('threads' as any)) {
+        database.deleteObjectStore('threads' as any);
+      }
+      if (database.objectStoreNames.contains('conversations')) {
+        database.deleteObjectStore('conversations');
+      }
+      if (database.objectStoreNames.contains('messages')) {
+        database.deleteObjectStore('messages');
       }
 
-      if (!database.objectStoreNames.contains('conversations')) {
-        const conversationStore = database.createObjectStore('conversations', { keyPath: 'conversationId' });
-        conversationStore.createIndex('by-last-message', 'lastMessageAt');
-      }
+      const conversationStore = database.createObjectStore('conversations', { keyPath: 'conversationId' });
+      conversationStore.createIndex('by-last-message', 'lastMessageAt');
 
-      // Messages store
-      if (!database.objectStoreNames.contains('messages')) {
-        const msgStore = database.createObjectStore('messages', { keyPath: 'id' });
-        msgStore.createIndex('by-conversation', 'conversationId');
-        msgStore.createIndex('by-created', 'createdAt');
-      }
+      const msgStore = database.createObjectStore('messages', { keyPath: 'id' });
+      msgStore.createIndex('by-conversation', 'conversationId');
+      msgStore.createIndex('by-created', 'createdAt');
     }
   });
 }
@@ -262,7 +263,13 @@ export async function loadMessages(
   conversationId: string,
   limit: number = 50
 ): Promise<Array<{ id: string; encrypted: EncryptedData; createdAt: number }>> {
-  const records = await getDB().getAllFromIndex('messages', 'by-conversation', conversationId);
+  let records: Array<{ id: string; conversationId: string; ciphertext: string; iv: string; createdAt: number }> = [];
+  try {
+    records = await getDB().getAllFromIndex('messages', 'by-conversation', conversationId);
+  } catch (error) {
+    console.warn('Messages index missing, returning empty history', error);
+    return [];
+  }
 
   // Sort by created time and limit
   return records
