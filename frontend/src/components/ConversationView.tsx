@@ -2,23 +2,23 @@
  * Conversation view with real-time subscription
  */
 
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../stores/authStore';
-import { useConversationStore } from '../stores/conversationStore';
-import { useMessageStore } from '../stores/messageStore';
-import { useCrypto } from '../crypto/CryptoContext';
-import { getSyncService } from '../services/sync';
-import { useConversationSubscription } from '../hooks/useConversationSubscription';
-import { MessageList } from './MessageList';
-import { MessageComposer } from './MessageComposer';
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../stores/authStore";
+import { useConversationStore } from "../stores/conversationStore";
+import { useMessageStore } from "../stores/messageStore";
+import { useCrypto } from "../crypto/CryptoContext";
+import { getSyncService } from "../services/sync";
+import { useConversationSubscription } from "../hooks/useConversationSubscription";
+import { MessageList } from "./MessageList";
+import { MessageComposer } from "./MessageComposer";
 
 interface Props {
   conversationId: string;
 }
 
 export function ConversationView({ conversationId }: Props) {
-  const user = useAuthStore(state => state.user);
+  const user = useAuthStore((state) => state.user);
   const { getConversation, setActiveConversation } = useConversationStore();
   const { loadMessagesForConversation, getMessages } = useMessageStore();
   const { getConversationKey, decryptMessage } = useCrypto();
@@ -40,14 +40,21 @@ export function ConversationView({ conversationId }: Props) {
   const loadConversationMessages = async () => {
     if (!user || !conversation || !conversation.participantId) return;
 
-    const syncService = getSyncService();
-    await syncService.syncConversation(conversationId, null);
+    try {
+      const syncService = getSyncService();
+      await syncService.syncConversation(conversationId, null);
 
-    const conversationKey = await getConversationKey(user.id, conversation.participantId);
+      const conversationKey = await getConversationKey(
+        user.id,
+        conversation.participantId,
+      );
 
-    await loadMessagesForConversation(conversationId, async (encrypted) => {
-      return decryptMessage(conversationKey, encrypted);
-    });
+      await loadMessagesForConversation(conversationId, async (encrypted) => {
+        return decryptMessage(conversationKey, encrypted);
+      });
+    } catch (error) {
+      console.error("Failed to load conversation messages", error);
+    }
   };
 
   if (!conversation) {
@@ -62,7 +69,7 @@ export function ConversationView({ conversationId }: Props) {
           className="conversation-back-button"
           onClick={() => {
             setActiveConversation(null);
-            navigate('/conversation');
+            navigate("/conversation");
           }}
           aria-label="Back to conversations"
         >
@@ -76,10 +83,7 @@ export function ConversationView({ conversationId }: Props) {
         </div>
       </div>
 
-      <MessageList
-        messages={messages}
-        currentUserId={user?.id || ''}
-      />
+      <MessageList messages={messages} currentUserId={user?.id || ""} />
 
       <MessageComposer
         conversationId={conversationId}
