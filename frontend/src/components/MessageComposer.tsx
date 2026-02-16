@@ -109,7 +109,7 @@ export function MessageComposer({ conversationId, participantId }: Props) {
   };
 
   return (
-    <form className="message-composer" onSubmit={handleSubmit}>
+    <form className="flex gap-2 border-t border-border bg-bg-secondary p-4 max-[480px]:p-3" onSubmit={handleSubmit}>
       <textarea
         ref={inputRef}
         value={content}
@@ -118,10 +118,11 @@ export function MessageComposer({ conversationId, participantId }: Props) {
         placeholder={isConnected ? 'Type a message...' : 'Offline - message will be queued...'}
         rows={1}
         disabled={isSending}
+        className="max-h-[150px] flex-1 resize-none rounded-3xl border border-border bg-bg-primary px-4 py-3 text-sm text-text-primary outline-none focus:border-accent"
       />
       <button
         type="submit"
-        className="send-button"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-accent text-xl text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
         disabled={!content.trim() || isSending}
         title={isConnected ? 'Send message' : 'Queue message (offline)'}
       >

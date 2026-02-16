@@ -64,16 +64,16 @@ export function PINSetup({ onSuccess, onCancel, isLoading = false }: PINSetupPro
   };
 
   return (
-    <div className="login-screen">
-      <div className="login-card">
-        <div className="logo">
-          <h1>HUSH</h1>
-          <p className="tagline">Secure Your Vault</p>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+        <div>
+          <h1 className="text-center text-[2.5rem] font-black tracking-[0.5rem] text-accent">HUSH</h1>
+          <p className="mb-8 text-center text-text-secondary">Secure Your Vault</p>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label htmlFor="pin">{isConfirming ? 'Confirm PIN' : 'Set PIN'}</label>
+          <div className="mb-4">
+            <label htmlFor="pin" className="mb-2 block font-medium">{isConfirming ? 'Confirm PIN' : 'Set PIN'}</label>
             <input
               id="pin"
               ref={inputRef}
@@ -84,30 +84,31 @@ export function PINSetup({ onSuccess, onCancel, isLoading = false }: PINSetupPro
               maxLength={8}
               autoComplete="new-password"
               required
+              className="w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-base text-text-primary outline-none focus:border-accent"
             />
             {!isConfirming && (
-              <small className="input-hint">
+              <small className="mt-2 block text-xs text-text-secondary">
                 This PIN will be required to unlock your vault when you reopen the browser.
                 Make sure you remember it - there's no recovery!
               </small>
             )}
           </div>
 
-          {error && <div className="error-message">{error}</div>}
+          {error && <div className="mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error">{error}</div>}
 
           <button
             type="submit"
-            className="primary-button"
+            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isLoading}
           >
             {isLoading ? 'Setting up...' : (isConfirming ? 'Confirm PIN' : 'Continue')}
           </button>
 
           {isConfirming ? (
-            <div className="auth-switch">
+            <div className="mt-6 border-t border-border pt-6 text-center">
               <button
                 type="button"
-                className="link-button"
+                className="cursor-pointer border-0 bg-transparent text-sm text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleBack}
                 disabled={isLoading}
               >
@@ -115,10 +116,10 @@ export function PINSetup({ onSuccess, onCancel, isLoading = false }: PINSetupPro
               </button>
             </div>
           ) : onCancel && (
-            <div className="auth-switch">
+            <div className="mt-6 border-t border-border pt-6 text-center">
               <button
                 type="button"
-                className="link-button"
+                className="cursor-pointer border-0 bg-transparent text-sm text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={onCancel}
                 disabled={isLoading}
               >

@@ -20,6 +20,17 @@ interface SettingsProps {
   onBack?: () => void;
 }
 
+const cardWrapper = 'flex min-h-screen items-center justify-center p-4';
+const card = 'w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]';
+const title = 'text-center text-[2.5rem] font-black tracking-[0.5rem] text-accent';
+const subtitle = 'mb-8 text-center text-text-secondary';
+const inputGroup = 'mb-4';
+const label = 'mb-2 block font-medium';
+const input = 'w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-base text-text-primary outline-none focus:border-accent';
+const errorClass = 'mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error';
+const primaryButton = 'w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
+const linkButton = 'mt-4 cursor-pointer border-0 bg-transparent text-sm text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
+
 export function Settings({ onBack }: SettingsProps) {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
@@ -29,14 +40,12 @@ export function Settings({ onBack }: SettingsProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // PIN change state
   const [pinChangeStep, setPinChangeStep] = useState<PINChangeStep>('old');
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pendingChangeVaultKey, setPendingChangeVaultKey] = useState<VaultKey | null>(null);
 
-  // Load PIN enabled status on mount
   useEffect(() => {
     const loadSettings = async () => {
       const enabled = await isPINEnabled();
@@ -85,7 +94,6 @@ export function Settings({ onBack }: SettingsProps) {
     setError(null);
 
     if (step === 'old') {
-      // Verify old PIN
       try {
         const vaultKey = await verifyPIN(oldPin);
         if (!vaultKey) {
@@ -99,7 +107,6 @@ export function Settings({ onBack }: SettingsProps) {
         setIsLoading(false);
       }
     } else if (step === 'confirm') {
-      // Confirm new PIN
       if (newPin !== confirmPin) {
         setError('PINs do not match');
         setIsLoading(false);
@@ -118,11 +125,8 @@ export function Settings({ onBack }: SettingsProps) {
         }
 
         await changePIN(oldPin, newPin, pendingChangeVaultKey);
-
-        // Update session with new PIN
         await setSessionVaultKey(pendingChangeVaultKey);
 
-        // Reset form
         setOldPin('');
         setNewPin('');
         setConfirmPin('');
@@ -156,22 +160,21 @@ export function Settings({ onBack }: SettingsProps) {
     navigate(-1);
   };
 
-  // Render different states
   if (state === 'enable-pin') {
     return <PINSetup onSuccess={handleEnablePIN} onCancel={() => setState('view')} isLoading={isLoading} />;
   }
 
   if (state === 'disable-pin') {
     return (
-      <div className="login-screen">
-        <div className="login-card">
-          <div className="logo">
-            <h1>HUSH</h1>
-            <p className="tagline">Disable PIN</p>
+      <div className={cardWrapper}>
+        <div className={card}>
+          <div>
+            <h1 className={title}>HUSH</h1>
+            <p className={subtitle}>Disable PIN</p>
           </div>
           <form onSubmit={(e) => { e.preventDefault(); handleDisablePIN((document.getElementById('disable-pin-input') as HTMLInputElement)?.value || ''); }}>
-            <div className="input-group">
-              <label htmlFor="disable-pin-input">Enter current PIN to disable</label>
+            <div className={inputGroup}>
+              <label htmlFor="disable-pin-input" className={label}>Enter current PIN to disable</label>
               <input
                 id="disable-pin-input"
                 type="password"
@@ -179,15 +182,16 @@ export function Settings({ onBack }: SettingsProps) {
                 autoComplete="current-password"
                 required
                 disabled={isLoading}
+                className={input}
               />
             </div>
-            {error && <div className="error-message">{error}</div>}
-            <button type="submit" className="primary-button" disabled={isLoading}>
+            {error && <div className={errorClass}>{error}</div>}
+            <button type="submit" className={primaryButton} disabled={isLoading}>
               {isLoading ? 'Disabling...' : 'Disable PIN'}
             </button>
             <button
               type="button"
-              className="link-button"
+              className={linkButton}
               onClick={() => setState('view')}
               disabled={isLoading}
             >
@@ -201,17 +205,17 @@ export function Settings({ onBack }: SettingsProps) {
 
   if (state === 'change-pin') {
     return (
-      <div className="login-screen">
-        <div className="login-card">
-          <div className="logo">
-            <h1>HUSH</h1>
-            <p className="tagline">Change PIN</p>
+      <div className={cardWrapper}>
+        <div className={card}>
+          <div>
+            <h1 className={title}>HUSH</h1>
+            <p className={subtitle}>Change PIN</p>
           </div>
 
           {pinChangeStep === 'old' && (
             <form onSubmit={(e) => { e.preventDefault(); handleChangePIN('old'); }}>
-              <div className="input-group">
-                <label htmlFor="old-pin">Current PIN</label>
+              <div className={inputGroup}>
+                <label htmlFor="old-pin" className={label}>Current PIN</label>
                 <input
                   id="old-pin"
                   type="password"
@@ -221,15 +225,16 @@ export function Settings({ onBack }: SettingsProps) {
                   autoComplete="current-password"
                   required
                   disabled={isLoading}
+                  className={input}
                 />
               </div>
-              {error && <div className="error-message">{error}</div>}
-              <button type="submit" className="primary-button" disabled={isLoading || !oldPin}>
+              {error && <div className={errorClass}>{error}</div>}
+              <button type="submit" className={primaryButton} disabled={isLoading || !oldPin}>
                 {isLoading ? 'Verifying...' : 'Continue'}
               </button>
               <button
                 type="button"
-                className="link-button"
+                className={linkButton}
                 onClick={() => {
                   setOldPin('');
                   setPendingChangeVaultKey(null);
@@ -244,8 +249,8 @@ export function Settings({ onBack }: SettingsProps) {
 
           {pinChangeStep === 'new' && (
             <form onSubmit={(e) => { e.preventDefault(); setPinChangeStep('confirm'); }}>
-              <div className="input-group">
-                <label htmlFor="new-pin">New PIN</label>
+              <div className={inputGroup}>
+                <label htmlFor="new-pin" className={label}>New PIN</label>
                 <input
                   id="new-pin"
                   type="password"
@@ -255,18 +260,19 @@ export function Settings({ onBack }: SettingsProps) {
                   autoComplete="new-password"
                   required
                   disabled={isLoading}
+                  className={input}
                 />
-                <small className="input-hint">
+                <small className="mt-2 block text-xs text-text-secondary">
                   Enter your new PIN (at least 4 characters)
                 </small>
               </div>
-              {error && <div className="error-message">{error}</div>}
-              <button type="submit" className="primary-button" disabled={isLoading || newPin.length < 4}>
+              {error && <div className={errorClass}>{error}</div>}
+              <button type="submit" className={primaryButton} disabled={isLoading || newPin.length < 4}>
                 Continue
               </button>
               <button
                 type="button"
-                className="link-button"
+                className={linkButton}
                 onClick={() => {
                   setNewPin('');
                   setError(null);
@@ -282,8 +288,8 @@ export function Settings({ onBack }: SettingsProps) {
 
           {pinChangeStep === 'confirm' && (
             <form onSubmit={(e) => { e.preventDefault(); handleChangePIN('confirm'); }}>
-              <div className="input-group">
-                <label htmlFor="confirm-pin">Confirm New PIN</label>
+              <div className={inputGroup}>
+                <label htmlFor="confirm-pin" className={label}>Confirm New PIN</label>
                 <input
                   id="confirm-pin"
                   type="password"
@@ -293,15 +299,16 @@ export function Settings({ onBack }: SettingsProps) {
                   autoComplete="new-password"
                   required
                   disabled={isLoading}
+                  className={input}
                 />
               </div>
-              {error && <div className="error-message">{error}</div>}
-              <button type="submit" className="primary-button" disabled={isLoading || !confirmPin}>
+              {error && <div className={errorClass}>{error}</div>}
+              <button type="submit" className={primaryButton} disabled={isLoading || !confirmPin}>
                 {isLoading ? 'Changing...' : 'Change PIN'}
               </button>
               <button
                 type="button"
-                className="link-button"
+                className={linkButton}
                 onClick={() => {
                   setConfirmPin('');
                   setError(null);
@@ -318,54 +325,54 @@ export function Settings({ onBack }: SettingsProps) {
     );
   }
 
-  // View settings (default state)
   return (
-    <div className="chat-container">
-      <div className="settings-container">
-        <div className="settings-header">
-          <button className="back-button" onClick={handleBack}>
+    <div className="flex h-screen overflow-hidden">
+      <div className="flex-1 overflow-y-auto bg-bg-primary">
+        <div className="flex items-center gap-4 border-b border-border bg-bg-secondary px-6 py-4">
+          <button
+            className="cursor-pointer border-0 bg-transparent p-2 text-xl text-accent transition-colors hover:text-accent-hover"
+            onClick={handleBack}
+          >
             &#8592; Back
           </button>
-          <h1>Settings</h1>
+          <h1 className="text-2xl text-text-primary">Settings</h1>
         </div>
 
-        <div className="settings-content">
-          {/* Account Info */}
-          <section className="settings-section">
-            <h2>Account</h2>
-            <div className="setting-item">
-              <div className="setting-info">
-                <span className="setting-label">Username</span>
-                <span className="setting-value">{user?.username || 'Unknown'}</span>
+        <div className="mx-auto max-w-4xl px-4 py-8">
+          <section className="mb-6 rounded-lg bg-bg-secondary p-6">
+            <h2 className="mb-4 border-b border-border pb-2 text-lg text-text-primary">Account</h2>
+            <div className="flex items-center justify-between gap-4 border-b border-border py-4">
+              <div className="flex flex-col">
+                <span className="font-medium">Username</span>
+                <span className="text-sm text-text-secondary">{user?.username || 'Unknown'}</span>
               </div>
             </div>
-            <div className="setting-item">
-              <div className="setting-info">
-                <span className="setting-label">User ID</span>
-                <span className="setting-value">{user?.id.slice(0, 16)}...</span>
+            <div className="flex items-center justify-between gap-4 py-4">
+              <div className="flex flex-col">
+                <span className="font-medium">User ID</span>
+                <span className="text-sm text-text-secondary">{user?.id.slice(0, 16)}...</span>
               </div>
             </div>
           </section>
 
-          {/* Security Settings */}
-          <section className="settings-section">
-            <h2>Security</h2>
-            <div className="setting-item">
-              <div className="setting-info">
-                <span className="setting-label">PIN Protection</span>
-                <span className="setting-value">{pinEnabled ? 'Enabled' : 'Disabled'}</span>
+          <section className="mb-6 rounded-lg bg-bg-secondary p-6">
+            <h2 className="mb-4 border-b border-border pb-2 text-lg text-text-primary">Security</h2>
+            <div className="flex items-center justify-between gap-4 py-4">
+              <div className="flex flex-col">
+                <span className="font-medium">PIN Protection</span>
+                <span className="text-sm text-text-secondary">{pinEnabled ? 'Enabled' : 'Disabled'}</span>
               </div>
-              <div className="setting-actions">
+              <div className="flex items-center gap-2">
                 {pinEnabled ? (
                   <>
                     <button
-                      className="secondary-button"
+                      className="cursor-pointer rounded-lg border border-border bg-transparent px-6 py-3 text-sm text-text-primary transition-colors hover:border-accent"
                       onClick={() => setState('change-pin')}
                     >
                       Change PIN
                     </button>
                     <button
-                      className="danger-button"
+                      className="cursor-pointer rounded-lg border-0 bg-error px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-80"
                       onClick={() => {
                         setError(null);
                         setState('disable-pin');
@@ -376,7 +383,7 @@ export function Settings({ onBack }: SettingsProps) {
                   </>
                 ) : (
                   <button
-                    className="primary-button"
+                    className="cursor-pointer rounded-lg border-0 bg-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
                     onClick={() => setState('enable-pin')}
                   >
                     Enable PIN
@@ -384,22 +391,21 @@ export function Settings({ onBack }: SettingsProps) {
                 )}
               </div>
             </div>
-            <p className="setting-hint">
+            <p className="mt-3 rounded bg-bg-primary p-3 text-xs leading-relaxed text-text-secondary">
               When PIN is enabled, you'll need to enter your PIN instead of your 12-word passphrase
               when reopening the browser. Your 12 words are still required for initial setup.
             </p>
           </section>
 
-          {/* Actions */}
-          <section className="settings-section">
-            <h2>Actions</h2>
+          <section className="mb-6 rounded-lg bg-bg-secondary p-6">
+            <h2 className="mb-4 border-b border-border pb-2 text-lg text-text-primary">Actions</h2>
             <button
-              className="danger-button full-width"
+              className="w-full cursor-pointer rounded-lg border-0 bg-error px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-80"
               onClick={handleLockVault}
             >
               Lock Vault
             </button>
-            <p className="setting-hint">
+            <p className="mt-3 rounded bg-bg-primary p-3 text-xs leading-relaxed text-text-secondary">
               Lock the vault to require re-authentication. Your data remains encrypted.
             </p>
           </section>

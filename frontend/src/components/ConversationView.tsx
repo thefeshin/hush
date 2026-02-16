@@ -58,15 +58,15 @@ export function ConversationView({ conversationId }: Props) {
   };
 
   if (!conversation) {
-    return <div className="conversation-not-found">Conversation not found</div>;
+    return <div className="flex h-full items-center justify-center text-text-secondary">Conversation not found</div>;
   }
 
   return (
-    <div className="conversation-view">
-      <div className="conversation-header">
+    <div className="flex h-[100dvh] flex-col md:h-full">
+      <div className="flex items-center gap-3 border-b border-border bg-bg-secondary p-4">
         <button
           type="button"
-          className="conversation-back-button"
+          className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-border bg-bg-primary font-bold leading-none text-text-primary md:hidden"
           onClick={() => {
             setActiveConversation(null);
             navigate("/conversation");
@@ -75,11 +75,11 @@ export function ConversationView({ conversationId }: Props) {
         >
           &lt;
         </button>
-        <div className="conversation-avatar large">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-white md:h-12 md:w-12 md:text-xl">
           {conversation.participantUsername[0].toUpperCase()}
         </div>
-        <div className="conversation-title">
-          <h2>{conversation.participantUsername}</h2>
+        <div className="ml-1">
+          <h2 className="text-lg">{conversation.participantUsername}</h2>
         </div>
       </div>
 

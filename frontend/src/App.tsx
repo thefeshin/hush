@@ -22,41 +22,19 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { RealtimeProvider } from './context/RealtimeContext';
 import type { VaultKey } from './types/crypto';
 
-import './styles/main.css';
-import './styles/pwa.css';
-
 type AppState = 'loading' | 'vault-entry' | 'pin-entry' | 'ready';
 
 function showPinSetupReminder(onOpenSettings: () => void) {
   toast.custom((t) => (
     <div
       role="status"
-      style={{
-        background: '#17212b',
-        color: '#f8fafc',
-        border: '1px solid #334155',
-        borderRadius: '10px',
-        padding: '12px 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        maxWidth: '440px',
-        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)'
-      }}
+      className="flex max-w-[440px] items-center gap-3 rounded-[10px] border border-slate-700 bg-[#17212b] px-3.5 py-3 text-slate-50 shadow-[0_8px_20px_rgba(0,0,0,0.25)]"
     >
-      <div style={{ fontSize: '14px', lineHeight: 1.4 }}>
+      <div className="text-sm leading-[1.4]">
         Set up a PIN to avoid entering your 12 words each time.
       </div>
       <button
-        style={{
-          border: 'none',
-          borderRadius: '8px',
-          padding: '6px 10px',
-          background: '#22c55e',
-          color: '#052e16',
-          fontWeight: 700,
-          cursor: 'pointer'
-        }}
+        className="cursor-pointer rounded-lg border-0 bg-green-500 px-2.5 py-1.5 font-bold text-green-950 hover:bg-green-400"
         onClick={() => {
           toast.dismiss(t.id);
           onOpenSettings();
@@ -181,15 +159,15 @@ function AppContent() {
     };
 
   return (
-    <>
+    <div className="min-h-screen bg-bg-primary text-text-primary leading-relaxed">
       <Toaster position="top-right" />
       {/* PWA Banners */}
       <UpdateBanner />
 
       {/* Main Content */}
       {appState === 'loading' && (
-        <div className="loading-screen">
-          <div className="spinner" />
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-border border-t-accent" />
         </div>
       )}
 
@@ -274,7 +252,7 @@ function AppContent() {
       {/* Bottom Banners */}
       <OfflineIndicator />
       <InstallBanner />
-    </>
+    </div>
   );
 }
 

@@ -19,6 +19,7 @@ interface Props {
 }
 
 export function RegisterForm({ vaultToken, onSuccess, onSwitchToLogin, isLoading, setIsLoading }: Props) {
+  const inputClassName = 'w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-base text-text-primary outline-none focus:border-accent';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -91,16 +92,16 @@ export function RegisterForm({ vaultToken, onSuccess, onSwitchToLogin, isLoading
   const isValid = !validateUsername(username) && password.length >= 8 && password === confirmPassword;
 
   return (
-    <div className="login-screen">
-      <div className="login-card">
-        <div className="logo">
-          <h1>HUSH</h1>
-          <p className="tagline">Create Your Account</p>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+        <div>
+          <h1 className="text-center text-[2.5rem] font-black tracking-[0.5rem] text-accent">HUSH</h1>
+          <p className="mb-8 text-center text-text-secondary">Create Your Account</p>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label htmlFor="username">Username</label>
+          <div className="mb-4">
+            <label htmlFor="username" className="mb-2 block font-medium">Username</label>
             <input
               ref={usernameRef}
               id="username"
@@ -111,13 +112,14 @@ export function RegisterForm({ vaultToken, onSuccess, onSwitchToLogin, isLoading
               disabled={isLoading}
               autoComplete="username"
               autoCapitalize="off"
+              className={inputClassName}
             />
-            {usernameError && <span className="field-error">{usernameError}</span>}
-            <span className="field-hint">Letters, numbers, underscores only</span>
+            {usernameError && <span className="mt-1 block text-xs text-error">{usernameError}</span>}
+            <span className="mt-1 block text-xs text-text-secondary">Letters, numbers, underscores only</span>
           </div>
 
-          <div className="input-group">
-            <label htmlFor="password">Password</label>
+          <div className="mb-4">
+            <label htmlFor="password" className="mb-2 block font-medium">Password</label>
             <input
               id="password"
               type="password"
@@ -126,12 +128,13 @@ export function RegisterForm({ vaultToken, onSuccess, onSwitchToLogin, isLoading
               placeholder="Choose a password"
               disabled={isLoading}
               autoComplete="new-password"
+              className={inputClassName}
             />
-            {passwordError && <span className="field-error">{passwordError}</span>}
+            {passwordError && <span className="mt-1 block text-xs text-error">{passwordError}</span>}
           </div>
 
-          <div className="input-group">
-            <label htmlFor="confirmPassword">Confirm Password</label>
+          <div className="mb-4">
+            <label htmlFor="confirmPassword" className="mb-2 block font-medium">Confirm Password</label>
             <input
               id="confirmPassword"
               type="password"
@@ -140,30 +143,31 @@ export function RegisterForm({ vaultToken, onSuccess, onSwitchToLogin, isLoading
               placeholder="Confirm your password"
               disabled={isLoading}
               autoComplete="new-password"
+              className={inputClassName}
             />
-            {confirmError && <span className="field-error">{confirmError}</span>}
+            {confirmError && <span className="mt-1 block text-xs text-error">{confirmError}</span>}
           </div>
 
           {error && (
-            <div className="error-message">
+            <div className="mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error">
               {error}
             </div>
           )}
 
           <button
             type="submit"
-            className="primary-button"
+            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isLoading || !isValid}
           >
             {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 
-        <div className="auth-switch">
-          <p>Already have an account?</p>
+        <div className="mt-6 border-t border-border pt-6 text-center">
+          <p className="mb-2 text-sm text-text-secondary">Already have an account?</p>
           <button
             type="button"
-            className="link-button"
+            className="cursor-pointer border-0 bg-transparent text-sm text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={onSwitchToLogin}
             disabled={isLoading}
           >

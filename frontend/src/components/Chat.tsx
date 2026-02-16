@@ -12,8 +12,6 @@ import { Sidebar } from './Sidebar';
 import { ConversationView } from './ConversationView';
 import { EmptyState } from './EmptyState';
 
-import '../styles/chat.css';
-
 export function Chat() {
   const user = useAuthStore(state => state.user);
   const { contacts, loadAllContacts } = useContactStore();
@@ -88,13 +86,17 @@ export function Chat() {
   }, [username, conversations, activeConversationId, setActiveConversation, navigate]);
 
   if (!user) {
-    return <div className="loading-screen"><div className="spinner" /></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-border border-t-accent" />
+      </div>
+    );
   }
 
   return (
-    <div className={`chat-container ${isConversationRoute ? 'mobile-conversation-open' : ''}`}>
-      <Sidebar />
-      <main className="chat-main">
+    <div className="flex h-screen overflow-hidden md:h-screen">
+      <Sidebar isConversationRoute={isConversationRoute} />
+      <main className={`${isConversationRoute ? 'flex' : 'hidden'} h-[100dvh] w-full flex-col bg-bg-primary min-w-0 md:flex md:h-screen md:flex-1`}>
         {activeConversationId ? (
           <ConversationView conversationId={activeConversationId} />
         ) : (

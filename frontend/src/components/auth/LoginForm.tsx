@@ -19,6 +19,7 @@ interface Props {
 }
 
 export function LoginForm({ vaultToken, onSuccess, onSwitchToRegister, isLoading, setIsLoading }: Props) {
+  const inputClassName = 'w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-base text-text-primary outline-none focus:border-accent';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -61,16 +62,16 @@ export function LoginForm({ vaultToken, onSuccess, onSwitchToRegister, isLoading
   const isValid = username.trim().length >= 3 && password.length >= 1;
 
   return (
-    <div className="login-screen">
-      <div className="login-card">
-        <div className="logo">
-          <h1>HUSH</h1>
-          <p className="tagline">Welcome Back</p>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+        <div>
+          <h1 className="text-center text-[2.5rem] font-black tracking-[0.5rem] text-accent">HUSH</h1>
+          <p className="mb-8 text-center text-text-secondary">Welcome Back</p>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label htmlFor="username">Username</label>
+          <div className="mb-4">
+            <label htmlFor="username" className="mb-2 block font-medium">Username</label>
             <input
               ref={usernameRef}
               id="username"
@@ -81,11 +82,12 @@ export function LoginForm({ vaultToken, onSuccess, onSwitchToRegister, isLoading
               disabled={isLoading}
               autoComplete="username"
               autoCapitalize="off"
+              className={inputClassName}
             />
           </div>
 
-          <div className="input-group">
-            <label htmlFor="password">Password</label>
+          <div className="mb-4">
+            <label htmlFor="password" className="mb-2 block font-medium">Password</label>
             <input
               id="password"
               type="password"
@@ -94,29 +96,30 @@ export function LoginForm({ vaultToken, onSuccess, onSwitchToRegister, isLoading
               placeholder="Enter your password"
               disabled={isLoading}
               autoComplete="current-password"
+              className={inputClassName}
             />
           </div>
 
           {error && (
-            <div className="error-message">
+            <div className="mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error">
               {error}
             </div>
           )}
 
           <button
             type="submit"
-            className="primary-button"
+            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isLoading || !isValid}
           >
             {isLoading ? 'Logging in...' : 'Login'}
           </button>
         </form>
 
-        <div className="auth-switch">
-          <p>Don't have an account?</p>
+        <div className="mt-6 border-t border-border pt-6 text-center">
+          <p className="mb-2 text-sm text-text-secondary">Don't have an account?</p>
           <button
             type="button"
-            className="link-button"
+            className="cursor-pointer border-0 bg-transparent text-sm text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={onSwitchToRegister}
             disabled={isLoading}
           >
