@@ -13,8 +13,7 @@
 
 [English](README.md) | فارسی | [License](LICENSE)
 
-HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزنگاری سمت کلاینت و حداقل‌سازی اعتماد به سرور تمرکز دارد.
-سرور فقط payloadهای رمز‌شده را رله می‌کند و تنها متادیتای لازم برای مسیردهی، کشف گفتگو و مدیریت نشست را نگه می‌دارد.
+HUSH یک «گاوصندوق پیام‌رسانی خصوصی» خودمیزبان است که روی رمزنگاریِ سمتِ کلاینت و حداقل‌کردنِ نیاز به اعتماد به سرور تمرکز دارد. بک‌اند صرفاً نقش رله را برای جابه‌جاییِ payloadهای رمزگذاری‌شده انجام می‌دهد و فقط متادیتای لازم برای routing، discovery و مدیریت session را نگه می‌دارد. این پروژه با درنظرگرفتن واقعیت اینترنت ایران ساخته شده: قطع‌و‌وصل‌های تکراری، فیلترینگ، اختلال در packetها، و دوره‌هایی که حتی SMS هم می‌تواند محدود، غیرقابل اتکا، یا در دسترس نباشد. در چنین شرایطی معمولاً فرض می‌شود پیام‌رسان‌های داخلی تحت شنود هستند و همین باعث می‌شود گزینه‌های قابل‌اعتمادِ داخل کشور برای ارتباط خصوصی خیلی محدود باشند.
 
 ## فهرست مطالب
 
@@ -36,6 +35,7 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - [زبان و مجوز](#fa-language-license)
 
 <a id="fa-features"></a>
+
 ## HUSH چه امکاناتی می‌دهد؟
 
 - جریان رمزنگاری انتها-به-انتها در کلاینت (Argon2id + HKDF + AES-GCM)
@@ -45,6 +45,7 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - اسکریپت‌های استقرار آفلاین/Air-Gapped
 
 <a id="fa-repo-layout"></a>
+
 ## ساختار مخزن
 
 - `backend/`: API و WebSocket (FastAPI)
@@ -54,6 +55,7 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - `nginx/`: پروکسی و TLS
 
 <a id="fa-security-realtime"></a>
+
 ## نکات امنیت و Realtime
 
 - احراز هویت WebSocket فقط از طریق cookie `access_token` انجام می‌شود.
@@ -65,6 +67,7 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
   - محدودیت‌های per-connection در WebSocket (سقف subscription + rate guard پیام ورودی).
 
 <a id="fa-prerequisites"></a>
+
 ## پیش‌نیازها
 
 - Docker و Docker Compose
@@ -74,12 +77,15 @@ HUSH یک پیام‌رسان خصوصی Self-Hosted است که روی رمزن
 - برای bootstrap آفلاین: Ubuntu 22.04 (jammy) amd64 یا Ubuntu 24.04 (noble) amd64
 
 <a id="fa-online-deployment"></a>
+
 ## استقرار آنلاین (ماشین متصل به اینترنت)
 
 <a id="fa-online-guided"></a>
+
 ### روش پیشنهادی (تعامل‌محور)
 
 Linux/macOS:
+
 ```bash
 chmod +x ./hush.sh
 ./hush.sh
@@ -89,6 +95,7 @@ chmod +x ./hush.sh
 دسترسی: `https://localhost`
 
 <a id="fa-online-manual"></a>
+
 ### روش دستی Docker
 
 ```bash
@@ -100,14 +107,17 @@ docker compose ps
 bind mount مخصوص توسعه backend در `docker-compose.override.yml` نگه داشته شده است.
 
 <a id="fa-local-development"></a>
+
 ## توسعه محلی (بدون استک کامل Docker)
 
 1. اجرای PostgreSQL:
+
 ```bash
 docker run -d --name hush-postgres -e POSTGRES_USER=hush -e POSTGRES_PASSWORD=hush -e POSTGRES_DB=hush -p 5432:5432 postgres:16-alpine
 ```
 
 2. اجرای backend:
+
 ```bash
 cd backend
 python -m venv venv
@@ -118,12 +128,14 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 تست‌های backend (اختیاری):
+
 ```bash
 pip install -r requirements-dev.txt
 pytest -q
 ```
 
 3. اجرای frontend:
+
 ```bash
 cd frontend
 npm install
@@ -133,12 +145,15 @@ npm run dev
 فرانت روی `http://localhost:3000` بالا می‌آید.
 
 <a id="fa-offline-deployment"></a>
+
 ## استقرار آفلاین (Air-Gapped)
 
 <a id="fa-offline-build"></a>
+
 ### روی ماشین دارای اینترنت
 
 Linux/macOS:
+
 ```bash
 bash ./offline/build-bundle.sh --target all
 ```
@@ -146,18 +161,22 @@ bash ./offline/build-bundle.sh --target all
 تارگت‌های پشتیبانی‌شده: Ubuntu 22.04 (jammy) amd64 و Ubuntu 24.04 (noble) amd64.
 
 خروجی‌ها:
+
 - `offline/bundles/jammy-amd64/*` و/یا `offline/bundles/noble-amd64/*`
 - هر bundle شامل Docker image tar، تمام `.deb`های لازم، manifestها، checksumها و اسکریپت‌های deployment است
 - فایل `.env` عمدا داخل bundle قرار نمی‌گیرد
 
 <a id="fa-offline-transfer"></a>
+
 ### انتقال به ماشین آفلاین
 
 فایل‌ها/پوشه‌های زیر را منتقل کنید:
+
 - کل پوشه پروژه (شامل `offline/bundles/<target>-amd64/`)
 - در صورت نیاز می‌توانید `.env` را برای reuse شدن secretها منتقل کنید
 
 نمونه‌های SCP:
+
 ```bash
 # انتقال کل مخزن
 scp -r /path/to/hush user@AIRGAP_HOST:/opt/
@@ -167,9 +186,11 @@ scp /path/to/hush/.env user@AIRGAP_HOST:/opt/hush/
 ```
 
 <a id="fa-offline-run"></a>
+
 ### اجرای استقرار روی ماشین آفلاین
 
 Linux/macOS:
+
 ```bash
 bash ./offline/deploy-airgapped.sh
 ```
@@ -178,6 +199,7 @@ bash ./offline/deploy-airgapped.sh
 اگر `.env` وجود نداشته باشد، روی همان ماشین آفلاین ساخته می‌شود و ۱۲ کلمه نمایش داده می‌شود.
 
 معادل دستی مراحل:
+
 ```bash
 bash ./offline/install-system-deps.sh
 bash ./offline/init-airgap-env.sh
@@ -185,6 +207,7 @@ bash ./offline/deploy-offline.sh
 ```
 
 برای چرخش secretها روی ماشین آفلاین:
+
 ```bash
 bash ./offline/deploy-airgapped.sh --rotate-secrets
 ```
@@ -194,6 +217,7 @@ bash ./offline/deploy-airgapped.sh --rotate-secrets
 فایل `.env` برای deployment اجباری است؛ اگر وجود نداشته باشد یا keyهای لازم را نداشته باشد، `deploy-offline.sh` با خطای واضح متوقف می‌شود و دستور بعدی را اعلام می‌کند.
 
 <a id="fa-operations"></a>
+
 ## عملیات روزمره
 
 ```bash
@@ -204,15 +228,18 @@ docker compose down -v
 ```
 
 <a id="fa-current-status"></a>
+
 ## وضعیت فعلی پروژه
 
 فاز P0 در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
+
 - کنترل دسترسی مبتنی بر عضویت گفتگو برای مسیرهای REST و WebSocket اعمال شد،
 - مسیر `subscribe_user` دیگر به `user_id` ارسالی کلاینت اعتماد نمی‌کند،
 - احراز هویت WebSocket با query token حذف شد (فقط cookie)،
 - نگهداری raw vault key در `sessionStorage` حذف و به حافظه‌ی runtime محدود شد.
 
 فاز P1 نیز در **۱۰ فوریه ۲۰۲۶** تکمیل شده است:
+
 - قفل کردن Vault به‌صورت پیش‌فرض تنظیم PIN را حذف نمی‌کند،
 - مسیر fallback پیام‌ها با `POST /api/messages` هم‌راستا شد،
 - اسکریپت‌های آفلاین مقدار معتبر `FAILURE_MODE=ip_temp` تولید می‌کنند،
@@ -220,16 +247,19 @@ docker compose down -v
 - مسیر `/health/db` هنگام خطای دیتابیس، پاسخ sanitize‌شده با `503` می‌دهد.
 
 فازهای پس از P1 (ریفکتور/اعتبارسنجی) نیز در **۱۰ فوریه ۲۰۲۶** تکمیل شده‌اند:
+
 - لایه‌های ناسازگارِ thread/conversation حذف و وضعیت frontend به مدل conversation-first یکپارچه شد،
 - چرخه‌عمر realtime/WebSocket در یک مسیر مرکزی مدیریت می‌شود،
 - برای payloadهای رمز‌شده در REST/WebSocket اعتبارسنجی سخت‌گیرانه اعمال شد (base64 strict، طول دقیق IV، سقف ciphertext)،
 - برای WebSocket محدودیت اشتراک گفتگو به ازای هر اتصال و rate guard برای پیام‌های ورودی اضافه شد.
 
 تغییرات ناسازگار با کلاینت‌های قدیمی:
+
 - اتصال `WebSocket` با `?token=...` دیگر پشتیبانی نمی‌شود.
 - payload جدید `subscribe_user` به شکل `{"type":"subscribe_user"}` است.
 
 <a id="fa-next-steps"></a>
+
 ## برنامه‌های بعدی
 
 1. افزودن تست‌های یکپارچه end-to-end برای سناریوهای reconnect/resubscribe با WebSocket واقعی.
@@ -237,6 +267,7 @@ docker compose down -v
 3. گسترش تست‌های frontend برای بازپخش صف پیام در شرایط اتصال ناپایدار.
 
 <a id="fa-language-license"></a>
+
 ## زبان و مجوز
 
 - نسخه انگلیسی: `README.md`
