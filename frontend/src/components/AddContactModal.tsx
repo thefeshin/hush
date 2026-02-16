@@ -115,21 +115,21 @@ export function AddContactModal({ onClose }: Props) {
                 autoFocus
                 disabled={isSearching}
                 autoCapitalize="off"
-                className="w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-base text-text-primary outline-none focus:border-accent"
+                className="w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-body text-text-primary outline-none focus:border-accent"
               />
-              <p className="mt-2 text-xs text-text-secondary">
+              <p className="mt-2 text-caption text-text-secondary">
                 Enter the username of the person you want to add
               </p>
             </div>
 
             {error && (
-              <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary">{error}</div>
+              <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-body text-text-secondary">{error}</div>
             )}
 
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-sm text-text-primary transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-body text-text-primary transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={onClose}
                 disabled={isSearching}
               >
@@ -137,7 +137,7 @@ export function AddContactModal({ onClose }: Props) {
               </button>
               <button
                 type="submit"
-                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-body font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isSearching || !username.trim()}
               >
                 {isSearching ? 'Searching...' : 'Search'}
@@ -147,22 +147,22 @@ export function AddContactModal({ onClose }: Props) {
         ) : (
           <div className="py-4">
             <div className="mb-4 flex items-center gap-4 rounded-lg bg-bg-primary p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-xl font-semibold text-zinc-900">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-h2 font-semibold text-zinc-900">
                 {foundUser.username.charAt(0).toUpperCase()}
               </div>
               <div className="flex flex-col">
-                <span className="text-lg font-semibold">{foundUser.username}</span>
+                <span className="text-h2 font-semibold">{foundUser.username}</span>
               </div>
             </div>
 
             {error && (
-              <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary">{error}</div>
+              <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-body text-text-secondary">{error}</div>
             )}
 
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-sm text-text-primary transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-body text-text-primary transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleReset}
                 disabled={isAdding}
               >
@@ -170,7 +170,7 @@ export function AddContactModal({ onClose }: Props) {
               </button>
               <button
                 type="button"
-                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-body font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleAdd}
                 disabled={isAdding}
               >

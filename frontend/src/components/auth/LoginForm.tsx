@@ -19,7 +19,7 @@ interface Props {
 }
 
 export function LoginForm({ vaultToken, onSuccess, onSwitchToRegister, isLoading, setIsLoading }: Props) {
-  const inputClassName = 'w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-base text-text-primary outline-none focus:border-accent';
+  const inputClassName = 'w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-body text-text-primary outline-none focus:border-accent';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export function LoginForm({ vaultToken, onSuccess, onSwitchToRegister, isLoading
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
         <div>
-          <h1 className="text-center text-[2.5rem] font-black tracking-[0.5rem] text-accent">HUSH</h1>
+          <h1 className="text-center text-display font-black tracking-[0.5rem] text-accent">HUSH</h1>
           <p className="mb-8 text-center text-text-secondary">Welcome Back</p>
         </div>
 
@@ -101,14 +101,14 @@ export function LoginForm({ vaultToken, onSuccess, onSwitchToRegister, isLoading
           </div>
 
           {error && (
-            <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary">
+            <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-body text-text-secondary">
               {error}
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-body font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isLoading || !isValid}
           >
             {isLoading ? 'Logging in...' : 'Login'}
@@ -116,10 +116,10 @@ export function LoginForm({ vaultToken, onSuccess, onSwitchToRegister, isLoading
         </form>
 
         <div className="mt-6 border-t border-border pt-6 text-center">
-          <p className="mb-2 text-sm text-text-secondary">Don't have an account?</p>
+          <p className="mb-2 text-body text-text-secondary">Don't have an account?</p>
           <button
             type="button"
-            className="cursor-pointer border-0 bg-transparent text-sm text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer border-0 bg-transparent text-body text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={onSwitchToRegister}
             disabled={isLoading}
           >

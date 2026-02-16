@@ -67,20 +67,20 @@ export function ConversationView({ conversationId }: Props) {
       <div className="flex items-center gap-3 border-b border-border bg-bg-secondary p-4">
         <button
           type="button"
-          className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-border bg-bg-primary font-bold leading-none text-text-primary md:hidden"
+          className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-border bg-bg-primary font-bold leading-none text-text-primary"
           onClick={() => {
             setActiveConversation(null);
-            navigate("/conversation");
+            navigate("/conversations");
           }}
           aria-label="Back to conversations"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-zinc-900 md:h-12 md:w-12 md:text-xl">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-body font-bold text-zinc-900 md:h-12 md:w-12 md:text-h2">
           {conversation.participantUsername[0].toUpperCase()}
         </div>
         <div className="ml-1">
-          <h2 className="text-lg">{conversation.participantUsername}</h2>
+          <h2 className="text-h2">{conversation.participantUsername}</h2>
         </div>
       </div>
 

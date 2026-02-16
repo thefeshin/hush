@@ -28,8 +28,8 @@ export function InstallBanner() {
           <Download className="h-4 w-4" />
         </span>
         <div className="flex flex-col">
-          <strong className="text-sm">Install HUSH</strong>
-          <span className="text-xs text-text-secondary">Add to home screen for the best experience</span>
+          <strong className="text-body">Install HUSH</strong>
+          <span className="text-caption text-text-secondary">Add to home screen for the best experience</span>
         </div>
       </div>
       <div className="flex gap-2">

@@ -118,11 +118,11 @@ export function MessageComposer({ conversationId, participantId }: Props) {
         placeholder={isConnected ? 'Type a message...' : 'Offline - message will be queued...'}
         rows={1}
         disabled={isSending}
-        className="max-h-[150px] flex-1 resize-none rounded-3xl border border-border bg-bg-primary px-4 py-3 text-sm text-text-primary outline-none focus:border-accent"
+        className="max-h-[150px] flex-1 resize-none rounded-3xl border border-border bg-bg-primary px-4 py-3 text-body text-text-primary outline-none focus:border-accent"
       />
       <button
         type="submit"
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-accent text-xl text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-accent text-h2 text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
         disabled={!content.trim() || isSending}
         title={isConnected ? 'Send message' : 'Queue message (offline)'}
       >

@@ -19,20 +19,21 @@ type PINChangeStep = 'old' | 'new' | 'confirm';
 
 interface SettingsProps {
   onBack?: () => void;
+  embedded?: boolean;
 }
 
 const cardWrapper = 'flex min-h-screen items-center justify-center p-4';
 const card = 'w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]';
-const title = 'text-center text-[2.5rem] font-black tracking-[0.5rem] text-accent';
+const title = 'text-center text-display font-black tracking-[0.5rem] text-accent';
 const subtitle = 'mb-8 text-center text-text-secondary';
 const inputGroup = 'mb-4';
 const label = 'mb-2 block font-medium';
-const input = 'w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-base text-text-primary outline-none focus:border-accent';
-const errorClass = 'mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary';
-const primaryButton = 'w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
-const linkButton = 'mt-4 cursor-pointer border-0 bg-transparent text-sm text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
+const input = 'w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-body text-text-primary outline-none focus:border-accent';
+const errorClass = 'mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-body text-text-secondary';
+const primaryButton = 'w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-body font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
+const linkButton = 'mt-4 cursor-pointer border-0 bg-transparent text-body text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
 
-export function Settings({ onBack }: SettingsProps) {
+export function Settings({ onBack, embedded = false }: SettingsProps) {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
   const { lockVault } = useCrypto();
@@ -154,6 +155,10 @@ export function Settings({ onBack }: SettingsProps) {
   };
 
   const handleBack = () => {
+    if (embedded) {
+      return;
+    }
+
     if (onBack) {
       onBack();
       return;
@@ -162,12 +167,16 @@ export function Settings({ onBack }: SettingsProps) {
   };
 
   if (state === 'enable-pin') {
-    return <PINSetup onSuccess={handleEnablePIN} onCancel={() => setState('view')} isLoading={isLoading} />;
+    return <PINSetup onSuccess={handleEnablePIN} onCancel={() => setState('view')} isLoading={isLoading} embedded={embedded} />;
   }
 
   if (state === 'disable-pin') {
+    const wrapperClass = embedded
+      ? 'px-4 py-6'
+      : cardWrapper;
+
     return (
-      <div className={cardWrapper}>
+      <div className={wrapperClass}>
         <div className={card}>
           <div>
             <h1 className={title}>HUSH</h1>
@@ -205,8 +214,12 @@ export function Settings({ onBack }: SettingsProps) {
   }
 
   if (state === 'change-pin') {
+    const wrapperClass = embedded
+      ? 'px-4 py-6'
+      : cardWrapper;
+
     return (
-      <div className={cardWrapper}>
+      <div className={wrapperClass}>
         <div className={card}>
           <div>
             <h1 className={title}>HUSH</h1>
@@ -263,7 +276,7 @@ export function Settings({ onBack }: SettingsProps) {
                   disabled={isLoading}
                   className={input}
                 />
-                <small className="mt-2 block text-xs text-text-secondary">
+                <small className="mt-2 block text-caption text-text-secondary">
                   Enter your new PIN (at least 4 characters)
                 </small>
               </div>
@@ -327,54 +340,56 @@ export function Settings({ onBack }: SettingsProps) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <div className="flex-1 overflow-y-auto bg-bg-primary">
-        <div className="flex items-center gap-4 border-b border-border bg-bg-secondary px-6 py-4">
-          <button
-            className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-2 text-sm font-medium text-accent transition-colors hover:text-accent-hover"
-            onClick={handleBack}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </button>
-          <h1 className="text-2xl text-text-primary">Settings</h1>
-        </div>
+    <div className={embedded ? 'bg-bg-secondary px-0 py-4' : 'flex h-screen overflow-hidden'}>
+      <div className={embedded ? 'mx-auto w-full max-w-4xl px-4' : 'flex-1 overflow-y-auto bg-bg-primary'}>
+        {!embedded && (
+          <div className="flex items-center gap-4 border-b border-border bg-bg-secondary px-6 py-4">
+            <button
+              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-2 text-body font-medium text-accent transition-colors hover:text-accent-hover"
+              onClick={handleBack}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </button>
+            <h1 className="text-h1 text-text-primary">Settings</h1>
+          </div>
+        )}
 
-        <div className="mx-auto max-w-4xl px-4 py-8">
+        <div className={embedded ? 'mx-auto max-w-4xl pb-4' : 'mx-auto max-w-4xl px-4 py-8'}>
           <section className="mb-6 rounded-lg bg-bg-secondary p-6">
-            <h2 className="mb-4 border-b border-border pb-2 text-lg text-text-primary">Account</h2>
+            <h2 className="mb-4 border-b border-border pb-2 text-h2 text-text-primary">Account</h2>
             <div className="flex items-center justify-between gap-4 border-b border-border py-4">
               <div className="flex flex-col">
                 <span className="font-medium">Username</span>
-                <span className="text-sm text-text-secondary">{user?.username || 'Unknown'}</span>
+                <span className="text-body text-text-secondary">{user?.username || 'Unknown'}</span>
               </div>
             </div>
             <div className="flex items-center justify-between gap-4 py-4">
               <div className="flex flex-col">
                 <span className="font-medium">User ID</span>
-                <span className="text-sm text-text-secondary">{user?.id.slice(0, 16)}...</span>
+                <span className="text-body text-text-secondary">{user?.id.slice(0, 16)}...</span>
               </div>
             </div>
           </section>
 
           <section className="mb-6 rounded-lg bg-bg-secondary p-6">
-            <h2 className="mb-4 border-b border-border pb-2 text-lg text-text-primary">Security</h2>
+            <h2 className="mb-4 border-b border-border pb-2 text-h2 text-text-primary">Security</h2>
             <div className="flex items-center justify-between gap-4 py-4">
               <div className="flex flex-col">
                 <span className="font-medium">PIN Protection</span>
-                <span className="text-sm text-text-secondary">{pinEnabled ? 'Enabled' : 'Disabled'}</span>
+                <span className="text-body text-text-secondary">{pinEnabled ? 'Enabled' : 'Disabled'}</span>
               </div>
               <div className="flex items-center gap-2">
                 {pinEnabled ? (
                   <>
                     <button
-                      className="cursor-pointer rounded-lg border border-border bg-transparent px-6 py-3 text-sm text-text-primary transition-colors hover:border-accent"
+                      className="cursor-pointer rounded-lg border border-border bg-transparent px-6 py-3 text-body text-text-primary transition-colors hover:border-accent"
                       onClick={() => setState('change-pin')}
                     >
                       Change PIN
                     </button>
                     <button
-                      className="cursor-pointer rounded-lg border border-zinc-500 bg-zinc-700 px-6 py-3 text-sm font-semibold text-zinc-100 transition-colors hover:bg-zinc-600"
+                      className="cursor-pointer rounded-lg border border-zinc-500 bg-zinc-700 px-6 py-3 text-body font-semibold text-zinc-100 transition-colors hover:bg-zinc-600"
                       onClick={() => {
                         setError(null);
                         setState('disable-pin');
@@ -385,7 +400,7 @@ export function Settings({ onBack }: SettingsProps) {
                   </>
                 ) : (
                   <button
-                    className="cursor-pointer rounded-lg border-0 bg-accent px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-accent-hover"
+                    className="cursor-pointer rounded-lg border-0 bg-accent px-6 py-3 text-body font-semibold text-zinc-900 transition-colors hover:bg-accent-hover"
                     onClick={() => setState('enable-pin')}
                   >
                     Enable PIN
@@ -393,21 +408,21 @@ export function Settings({ onBack }: SettingsProps) {
                 )}
               </div>
             </div>
-            <p className="mt-3 rounded bg-bg-primary p-3 text-xs leading-relaxed text-text-secondary">
+            <p className="mt-3 rounded bg-bg-primary p-3 text-caption leading-relaxed text-text-secondary">
               When PIN is enabled, you'll need to enter your PIN instead of your 12-word passphrase
               when reopening the browser. Your 12 words are still required for initial setup.
             </p>
           </section>
 
           <section className="mb-6 rounded-lg bg-bg-secondary p-6">
-            <h2 className="mb-4 border-b border-border pb-2 text-lg text-text-primary">Actions</h2>
+            <h2 className="mb-4 border-b border-border pb-2 text-h2 text-text-primary">Actions</h2>
             <button
-              className="w-full cursor-pointer rounded-lg border border-zinc-500 bg-zinc-700 px-6 py-3 text-sm font-semibold text-zinc-100 transition-colors hover:bg-zinc-600"
+              className="w-full cursor-pointer rounded-lg border border-zinc-500 bg-zinc-700 px-6 py-3 text-body font-semibold text-zinc-100 transition-colors hover:bg-zinc-600"
               onClick={handleLockVault}
             >
               Lock Vault
             </button>
-            <p className="mt-3 rounded bg-bg-primary p-3 text-xs leading-relaxed text-text-secondary">
+            <p className="mt-3 rounded bg-bg-primary p-3 text-caption leading-relaxed text-text-secondary">
               Lock the vault to require re-authentication. Your data remains encrypted.
             </p>
           </section>

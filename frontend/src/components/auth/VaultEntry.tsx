@@ -91,7 +91,7 @@ export function VaultEntry({ onSuccess, isLoading = false, error, onClearError }
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
         <div>
-          <h1 className="text-center text-[2.5rem] font-black tracking-[0.5rem] text-accent">HUSH</h1>
+          <h1 className="text-center text-display font-black tracking-[0.5rem] text-accent">HUSH</h1>
           <p className="mb-8 text-center text-text-secondary">Zero-Knowledge Encrypted Chat</p>
         </div>
 
@@ -111,38 +111,38 @@ export function VaultEntry({ onSuccess, isLoading = false, error, onClearError }
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
-                className={`w-full resize-none rounded-lg border border-border bg-bg-primary p-4 pr-16 font-mono text-base text-text-primary outline-none focus:border-accent ${showWords ? '[-webkit-text-security:none] [text-security:none]' : '[-webkit-text-security:disc] [text-security:disc]'}`}
+                className={`w-full resize-none rounded-lg border border-border bg-bg-primary p-4 pr-16 font-mono text-body text-text-primary outline-none focus:border-accent ${showWords ? '[-webkit-text-security:none] [text-security:none]' : '[-webkit-text-security:disc] [text-security:disc]'}`}
               />
               <button
                 type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer border-0 bg-transparent p-2 text-sm text-accent hover:text-accent-hover"
+                className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer border-0 bg-transparent p-2 text-body text-accent hover:text-accent-hover"
                 onClick={() => setShowWords(!showWords)}
                 tabIndex={-1}
               >
                 {showWords ? 'Hide' : 'Show'}
               </button>
             </div>
-            <div className="mt-1 text-right text-sm text-text-secondary">
+            <div className="mt-1 text-right text-body text-text-secondary">
               {wordCount}/12 words
             </div>
           </div>
 
           {displayError && (
-            <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary">
+            <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-body text-text-secondary">
               {displayError}
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-body font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             disabled={finalIsLoading || !isValidCount}
           >
             {isProcessing ? 'Setting up...' : finalIsLoading ? 'Verifying...' : 'Continue'}
           </button>
         </form>
 
-        <div className="mt-6 border-t border-border pt-6 text-center text-xs text-text-secondary">
+        <div className="mt-6 border-t border-border pt-6 text-center text-caption text-text-secondary">
           <p>Your words are sent over TLS for verification only.</p>
           <p>The server stores a hash for authentication, not plaintext words.</p>
         </div>

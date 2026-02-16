@@ -15,7 +15,6 @@ import { LoginForm, RegisterForm } from './components/auth';
 import { VaultEntry } from './components/auth/VaultEntry';
 import { PINEntry } from './components/auth/PINEntry';
 import { Chat } from './components/Chat';
-import { Settings } from './components/Settings';
 import { InstallBanner } from './components/InstallBanner';
 import { UpdateBanner } from './components/UpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -30,7 +29,7 @@ function showPinSetupReminder(onOpenSettings: () => void) {
       role="status"
       className="flex max-w-[440px] items-center gap-3 rounded-[10px] border border-slate-700 bg-[#17212b] px-3.5 py-3 text-slate-50 shadow-[0_8px_20px_rgba(0,0,0,0.25)]"
     >
-      <div className="text-sm leading-[1.4]">
+      <div className="text-body leading-[1.4]">
         Set up a PIN to avoid entering your 12 words each time.
       </div>
       <button
@@ -102,7 +101,7 @@ function AppContent() {
         await unlockVaultWithKey(storedKey);
       }
       setAppState('ready');
-      navigate('/conversation', { replace: true });
+      navigate('/conversations', { replace: true });
     } else {
       setAppState('ready');
       navigate('/login', { replace: true });
@@ -125,7 +124,7 @@ function AppContent() {
     }
 
     setAppState('ready');
-    navigate('/conversation', { replace: true });
+    navigate('/conversations', { replace: true });
   };
 
   const handleRegisterSuccess = async (newUser: User) => {
@@ -144,13 +143,13 @@ function AppContent() {
     }
 
     setAppState('ready');
-    navigate('/conversation', { replace: true });
+    navigate('/conversations', { replace: true });
   };
 
   const handlePINUnlock = async (vaultKey: VaultKey) => {
     await unlockVaultWithKey(vaultKey);
     setAppState('ready');
-    navigate('/conversation', { replace: true });
+    navigate('/conversations', { replace: true });
   };
 
   const handleVaultEntryCancel = () => {
@@ -159,7 +158,7 @@ function AppContent() {
     };
 
   return (
-    <div className="min-h-screen bg-bg-primary text-text-primary leading-relaxed">
+    <div className="min-h-screen bg-bg-primary text-body text-text-primary leading-relaxed">
       <Toaster position="top-right" />
       {/* PWA Banners */}
       <UpdateBanner />
@@ -207,7 +206,7 @@ function AppContent() {
                       <Navigate to="/" replace />
                     )
                   )
-                : <Navigate to="/conversation" replace />
+                : <Navigate to="/conversations" replace />
             }
           />
           <Route
@@ -227,24 +226,28 @@ function AppContent() {
                       <Navigate to="/" replace />
                     )
                   )
-                : <Navigate to="/conversation" replace />
+                : <Navigate to="/conversations" replace />
             }
           />
           <Route
-            path="/conversation"
+            path="/conversations"
             element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
           />
           <Route
-            path="/conversation/:username"
+            path="/conversations/:username"
+            element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/contacts"
             element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
           />
           <Route
             path="/settings"
-            element={isAuthenticated ? <Settings /> : <Navigate to="/login" replace />}
+            element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
           />
           <Route
             path="*"
-            element={<Navigate to={isAuthenticated ? '/conversation' : '/login'} replace />}
+            element={<Navigate to={isAuthenticated ? '/conversations' : '/login'} replace />}
           />
         </Routes>
       )}
