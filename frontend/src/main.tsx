@@ -6,6 +6,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { registerServiceWorker } from './services/serviceWorker';
+import './styles/tailwind.css';
 
 // Register service worker
 registerServiceWorker();

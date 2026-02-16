@@ -3,6 +3,7 @@
  */
 
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { useContactStore } from '../stores/contactStore';
 import { useAuthStore } from '../stores/authStore';
 import { useCrypto } from '../crypto/CryptoContext';
@@ -92,17 +93,19 @@ export function AddContactModal({ onClose }: Props) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70" onClick={onClose}>
+      <div className="m-4 w-full max-w-md rounded-2xl bg-bg-secondary p-6" onClick={e => e.stopPropagation()}>
+        <div className="mb-6 flex items-center justify-between">
           <h2>Add Contact</h2>
-          <button className="close-button" onClick={onClose}>&times;</button>
+          <button className="cursor-pointer border-0 bg-transparent p-0 text-text-secondary hover:text-text-primary" onClick={onClose}>
+            <X className="h-6 w-6" />
+          </button>
         </div>
 
         {!foundUser ? (
           <form onSubmit={handleSearch}>
-            <div className="input-group">
-              <label htmlFor="username">Username</label>
+            <div className="mb-4">
+              <label htmlFor="username" className="mb-2 block font-medium">Username</label>
               <input
                 id="username"
                 type="text"
@@ -112,20 +115,21 @@ export function AddContactModal({ onClose }: Props) {
                 autoFocus
                 disabled={isSearching}
                 autoCapitalize="off"
+                className="w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-body text-text-primary outline-none focus:border-accent"
               />
-              <p className="input-hint">
+              <p className="mt-2 text-caption text-text-secondary">
                 Enter the username of the person you want to add
               </p>
             </div>
 
             {error && (
-              <div className="error-message">{error}</div>
+              <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-body text-text-secondary">{error}</div>
             )}
 
-            <div className="modal-actions">
+            <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                className="secondary-button"
+                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-body text-text-primary transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={onClose}
                 disabled={isSearching}
               >
@@ -133,7 +137,7 @@ export function AddContactModal({ onClose }: Props) {
               </button>
               <button
                 type="submit"
-                className="primary-button"
+                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-body font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isSearching || !username.trim()}
               >
                 {isSearching ? 'Searching...' : 'Search'}
@@ -141,24 +145,24 @@ export function AddContactModal({ onClose }: Props) {
             </div>
           </form>
         ) : (
-          <div className="found-user">
-            <div className="user-info">
-              <div className="user-avatar">
+          <div className="py-4">
+            <div className="mb-4 flex items-center gap-4 rounded-lg bg-bg-primary p-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-h2 font-semibold text-zinc-900">
                 {foundUser.username.charAt(0).toUpperCase()}
               </div>
-              <div className="user-details">
-                <span className="user-name">{foundUser.username}</span>
+              <div className="flex flex-col">
+                <span className="text-h2 font-semibold">{foundUser.username}</span>
               </div>
             </div>
 
             {error && (
-              <div className="error-message">{error}</div>
+              <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-body text-text-secondary">{error}</div>
             )}
 
-            <div className="modal-actions">
+            <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                className="secondary-button"
+                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-body text-text-primary transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleReset}
                 disabled={isAdding}
               >
@@ -166,7 +170,7 @@ export function AddContactModal({ onClose }: Props) {
               </button>
               <button
                 type="button"
-                className="primary-button"
+                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-body font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleAdd}
                 disabled={isAdding}
               >

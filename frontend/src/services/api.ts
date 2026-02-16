@@ -3,7 +3,13 @@
  * All requests include credentials for cookie-based auth
  */
 
-const API_BASE = '/api';
+const API_BASE = "/api";
+
+const RETRYABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface User {
   id: string;
@@ -33,10 +39,10 @@ export class AuthenticationError extends Error {
   constructor(
     public code: string,
     public message: string,
-    public remainingAttempts?: number
+    public remainingAttempts?: number,
   ) {
     super(message);
-    this.name = 'AuthenticationError';
+    this.name = "AuthenticationError";
   }
 }
 
@@ -45,18 +51,18 @@ export class AuthenticationError extends Error {
  */
 export async function verifyVault(words: string): Promise<VaultResponse> {
   const response = await fetch(`${API_BASE}/auth/vault`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ words }),
-    credentials: 'include'
+    credentials: "include",
   });
 
   if (!response.ok) {
     const error = await response.json();
     throw new AuthenticationError(
-      error.detail?.error || 'auth_failed',
-      error.detail?.message || 'Authentication failed',
-      error.detail?.remaining_attempts
+      error.detail?.error || "auth_failed",
+      error.detail?.message || "Authentication failed",
+      error.detail?.remaining_attempts,
     );
   }
 
@@ -66,19 +72,23 @@ export async function verifyVault(words: string): Promise<VaultResponse> {
 /**
  * Register a new user
  */
-export async function register(vaultToken: string, username: string, password: string): Promise<AuthSuccess> {
+export async function register(
+  vaultToken: string,
+  username: string,
+  password: string,
+): Promise<AuthSuccess> {
   const response = await fetch(`${API_BASE}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ vault_token: vaultToken, username, password }),
-    credentials: 'include'
+    credentials: "include",
   });
 
   if (!response.ok) {
     const error = await response.json();
     throw new AuthenticationError(
-      error.detail?.error || 'registration_failed',
-      error.detail?.message || 'Registration failed'
+      error.detail?.error || "registration_failed",
+      error.detail?.message || "Registration failed",
     );
   }
 
@@ -88,19 +98,23 @@ export async function register(vaultToken: string, username: string, password: s
 /**
  * Login an existing user
  */
-export async function login(vaultToken: string, username: string, password: string): Promise<AuthSuccess> {
+export async function login(
+  vaultToken: string,
+  username: string,
+  password: string,
+): Promise<AuthSuccess> {
   const response = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ vault_token: vaultToken, username, password }),
-    credentials: 'include'
+    credentials: "include",
   });
 
   if (!response.ok) {
     const error = await response.json();
     throw new AuthenticationError(
-      error.detail?.error || 'login_failed',
-      error.detail?.message || 'Login failed'
+      error.detail?.error || "login_failed",
+      error.detail?.message || "Login failed",
     );
   }
 
@@ -112,12 +126,12 @@ export async function login(vaultToken: string, username: string, password: stri
  */
 export async function refreshToken(): Promise<AuthSuccess> {
   const response = await fetch(`${API_BASE}/auth/refresh`, {
-    method: 'POST',
-    credentials: 'include'
+    method: "POST",
+    credentials: "include",
   });
 
   if (!response.ok) {
-    throw new AuthenticationError('refresh_failed', 'Session expired');
+    throw new AuthenticationError("refresh_failed", "Session expired");
   }
 
   return response.json();
@@ -128,8 +142,8 @@ export async function refreshToken(): Promise<AuthSuccess> {
  */
 export async function logout(): Promise<void> {
   await fetch(`${API_BASE}/auth/logout`, {
-    method: 'POST',
-    credentials: 'include'
+    method: "POST",
+    credentials: "include",
   });
 }
 
@@ -138,11 +152,11 @@ export async function logout(): Promise<void> {
  */
 export async function getCurrentUser(): Promise<User> {
   const response = await fetch(`${API_BASE}/auth/me`, {
-    credentials: 'include'
+    credentials: "include",
   });
 
   if (!response.ok) {
-    throw new AuthenticationError('not_authenticated', 'Not authenticated');
+    throw new AuthenticationError("not_authenticated", "Not authenticated");
   }
 
   return response.json();
@@ -151,16 +165,21 @@ export async function getCurrentUser(): Promise<User> {
 /**
  * Lookup user by username
  */
-export async function lookupUser(username: string): Promise<UserLookupResponse> {
-  const response = await fetch(`${API_BASE}/users/lookup?username=${encodeURIComponent(username)}`, {
-    credentials: 'include'
-  });
+export async function lookupUser(
+  username: string,
+): Promise<UserLookupResponse> {
+  const response = await fetch(
+    `${API_BASE}/users/lookup?username=${encodeURIComponent(username)}`,
+    {
+      credentials: "include",
+    },
+  );
 
   if (!response.ok) {
     if (response.status === 401) {
-      throw new AuthenticationError('not_authenticated', 'Not authenticated');
+      throw new AuthenticationError("not_authenticated", "Not authenticated");
     }
-    throw new Error('User lookup failed');
+    throw new Error("User lookup failed");
   }
 
   return response.json();
@@ -172,7 +191,7 @@ export async function lookupUser(username: string): Promise<UserLookupResponse> 
 export async function getSalt(): Promise<string> {
   const response = await fetch(`${API_BASE}/auth/salt`);
   if (!response.ok) {
-    throw new Error('Failed to fetch salt');
+    throw new Error("Failed to fetch salt");
   }
   const data = await response.json();
   return data.kdf_salt;
@@ -181,16 +200,50 @@ export async function getSalt(): Promise<string> {
 /**
  * Discover all conversations for the authenticated user
  */
-export async function discoverConversations(): Promise<Array<{ conversation_id: string; other_user_id: string; other_username: string }>> {
-  const response = await fetch(`${API_BASE}/conversations/discover`, {
-    credentials: 'include'
-  });
+export async function discoverConversations(): Promise<
+  Array<{
+    conversation_id: string;
+    other_user_id: string;
+    other_username: string;
+  }>
+> {
+  const maxAttempts = 3;
+  let response: Response | null = null;
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new AuthenticationError('not_authenticated', 'Not authenticated');
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      response = await fetch(`${API_BASE}/conversations/discover`, {
+        credentials: "include",
+      });
+    } catch {
+      if (attempt >= maxAttempts) {
+        throw new Error("Failed to discover conversations");
+      }
+
+      await sleep(200 * 2 ** (attempt - 1));
+      continue;
     }
-    throw new Error('Failed to discover conversations');
+
+    if (response.ok) {
+      break;
+    }
+
+    if (response.status === 401) {
+      throw new AuthenticationError("not_authenticated", "Not authenticated");
+    }
+
+    if (
+      !RETRYABLE_HTTP_STATUSES.has(response.status) ||
+      attempt >= maxAttempts
+    ) {
+      throw new Error("Failed to discover conversations");
+    }
+
+    await sleep(200 * 2 ** (attempt - 1));
+  }
+
+  if (!response || !response.ok) {
+    throw new Error("Failed to discover conversations");
   }
 
   const data = await response.json();
@@ -203,8 +256,8 @@ export async function discoverConversations(): Promise<Array<{ conversation_id: 
   if (Array.isArray(data.conversation_ids)) {
     return data.conversation_ids.map((conversationId: string) => ({
       conversation_id: conversationId,
-      other_user_id: '',
-      other_username: ''
+      other_user_id: "",
+      other_username: "",
     }));
   }
 
@@ -217,11 +270,11 @@ export async function discoverConversations(): Promise<Array<{ conversation_id: 
 export function createAuthenticatedFetch() {
   return async function authFetch(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<Response> {
     let response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
-      credentials: 'include'
+      credentials: "include",
     });
 
     // If unauthorized, try to refresh token
@@ -231,7 +284,7 @@ export function createAuthenticatedFetch() {
         // Retry original request
         response = await fetch(`${API_BASE}${endpoint}`, {
           ...options,
-          credentials: 'include'
+          credentials: "include",
         });
       } catch {
         // Refresh failed, return original 401 response
@@ -243,11 +296,13 @@ export function createAuthenticatedFetch() {
 }
 
 // Legacy export for backward compatibility
-export async function authenticate(words: string): Promise<{ token: string; kdf_salt: string; expires_in: number }> {
+export async function authenticate(
+  words: string,
+): Promise<{ token: string; kdf_salt: string; expires_in: number }> {
   const response = await verifyVault(words);
   return {
     token: response.vault_token,
     kdf_salt: response.kdf_salt,
-    expires_in: response.expires_in
+    expires_in: response.expires_in,
   };
 }

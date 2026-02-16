@@ -19,8 +19,8 @@ export default defineConfig({
         name: 'HUSH',
         short_name: 'HUSH',
         description: 'Zero-Knowledge Encrypted Chat',
-        theme_color: '#1a1a2e',
-        background_color: '#1a1a2e',
+        theme_color: '#09090b',
+        background_color: '#09090b',
         display: 'standalone',
         icons: [
           {

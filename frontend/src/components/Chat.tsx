@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useContactStore } from '../stores/contactStore';
 import { useConversationStore } from '../stores/conversationStore';
@@ -12,17 +12,23 @@ import { Sidebar } from './Sidebar';
 import { ConversationView } from './ConversationView';
 import { EmptyState } from './EmptyState';
 
-import '../styles/chat.css';
+const VALID_TABS = ['conversations', 'contacts', 'settings'] as const;
+type ChatTab = (typeof VALID_TABS)[number];
 
 export function Chat() {
   const user = useAuthStore(state => state.user);
   const { contacts, loadAllContacts } = useContactStore();
   const { conversations, activeConversationId, loadAllConversations, discoverConversations, setActiveConversation } = useConversationStore();
   const { decryptContacts, decryptIdentity } = useCrypto();
-  const { username } = useParams<{ username: string }>();
+  const { username } = useParams<{ username?: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const [hasDiscovered, setHasDiscovered] = useState(false);
-  const isConversationRoute = Boolean(username);
+  const pathRoot = location.pathname.split('/')[1] || 'conversations';
+  const activeTab: ChatTab = VALID_TABS.includes(pathRoot as ChatTab)
+    ? (pathRoot as ChatTab)
+    : 'conversations';
+  const isConversationRoute = activeTab === 'conversations' && Boolean(username);
 
   // Load contacts on mount
   useEffect(() => {
@@ -60,7 +66,7 @@ export function Chat() {
   }, [user, hasDiscovered, discoverConversations]);
 
   useEffect(() => {
-    if (!username) {
+    if (activeTab !== 'conversations' || !username) {
       setActiveConversation(null);
       return;
     }
@@ -68,7 +74,7 @@ export function Chat() {
     const decodedUsername = decodeURIComponent(username).toLowerCase();
     if (decodedUsername === 'inbox') {
       setActiveConversation(null);
-      navigate('/conversation', { replace: true });
+      navigate('/conversations', { replace: true });
       return;
     }
 
@@ -84,17 +90,21 @@ export function Chat() {
     }
 
     setActiveConversation(null);
-    navigate('/conversation', { replace: true });
-  }, [username, conversations, activeConversationId, setActiveConversation, navigate]);
+    navigate('/conversations', { replace: true });
+  }, [activeTab, username, conversations, activeConversationId, setActiveConversation, navigate]);
 
   if (!user) {
-    return <div className="loading-screen"><div className="spinner" /></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-border border-t-accent" />
+      </div>
+    );
   }
 
   return (
-    <div className={`chat-container ${isConversationRoute ? 'mobile-conversation-open' : ''}`}>
-      <Sidebar />
-      <main className="chat-main">
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar isConversationRoute={isConversationRoute} activeTab={activeTab} />
+      <main className={`${isConversationRoute ? 'flex' : 'hidden'} h-[100dvh] w-full min-w-0 flex-col bg-bg-primary`}>
         {activeConversationId ? (
           <ConversationView conversationId={activeConversationId} />
         ) : (

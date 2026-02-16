@@ -32,6 +32,10 @@ async def test_discover_conversations_returns_other_username_and_legacy_ids():
 
     response = await discover_conversations(user=user, conn=conn)
 
+    query = conn.fetch.call_args.args[0]
+    assert "MIN(" not in query
+    assert "ROW_NUMBER()" in query
+
     assert response["conversations"] == [
         {
             "conversation_id": str(conversation_one),

@@ -15,15 +15,11 @@ import { LoginForm, RegisterForm } from './components/auth';
 import { VaultEntry } from './components/auth/VaultEntry';
 import { PINEntry } from './components/auth/PINEntry';
 import { Chat } from './components/Chat';
-import { Settings } from './components/Settings';
 import { InstallBanner } from './components/InstallBanner';
 import { UpdateBanner } from './components/UpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { RealtimeProvider } from './context/RealtimeContext';
 import type { VaultKey } from './types/crypto';
-
-import './styles/main.css';
-import './styles/pwa.css';
 
 type AppState = 'loading' | 'vault-entry' | 'pin-entry' | 'ready';
 
@@ -31,32 +27,13 @@ function showPinSetupReminder(onOpenSettings: () => void) {
   toast.custom((t) => (
     <div
       role="status"
-      style={{
-        background: '#17212b',
-        color: '#f8fafc',
-        border: '1px solid #334155',
-        borderRadius: '10px',
-        padding: '12px 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        maxWidth: '440px',
-        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)'
-      }}
+      className="flex max-w-[440px] items-center gap-3 rounded-[10px] border border-slate-700 bg-[#17212b] px-3.5 py-3 text-slate-50 shadow-[0_8px_20px_rgba(0,0,0,0.25)]"
     >
-      <div style={{ fontSize: '14px', lineHeight: 1.4 }}>
+      <div className="text-body leading-[1.4]">
         Set up a PIN to avoid entering your 12 words each time.
       </div>
       <button
-        style={{
-          border: 'none',
-          borderRadius: '8px',
-          padding: '6px 10px',
-          background: '#22c55e',
-          color: '#052e16',
-          fontWeight: 700,
-          cursor: 'pointer'
-        }}
+        className="cursor-pointer rounded-lg border border-zinc-600 bg-zinc-200 px-2.5 py-1.5 font-bold text-zinc-900 hover:bg-zinc-100"
         onClick={() => {
           toast.dismiss(t.id);
           onOpenSettings();
@@ -124,7 +101,7 @@ function AppContent() {
         await unlockVaultWithKey(storedKey);
       }
       setAppState('ready');
-      navigate('/conversation', { replace: true });
+      navigate('/conversations', { replace: true });
     } else {
       setAppState('ready');
       navigate('/login', { replace: true });
@@ -147,7 +124,7 @@ function AppContent() {
     }
 
     setAppState('ready');
-    navigate('/conversation', { replace: true });
+    navigate('/conversations', { replace: true });
   };
 
   const handleRegisterSuccess = async (newUser: User) => {
@@ -166,13 +143,13 @@ function AppContent() {
     }
 
     setAppState('ready');
-    navigate('/conversation', { replace: true });
+    navigate('/conversations', { replace: true });
   };
 
   const handlePINUnlock = async (vaultKey: VaultKey) => {
     await unlockVaultWithKey(vaultKey);
     setAppState('ready');
-    navigate('/conversation', { replace: true });
+    navigate('/conversations', { replace: true });
   };
 
   const handleVaultEntryCancel = () => {
@@ -181,15 +158,15 @@ function AppContent() {
     };
 
   return (
-    <>
+    <div className="min-h-screen bg-bg-primary text-body text-text-primary leading-relaxed">
       <Toaster position="top-right" />
       {/* PWA Banners */}
       <UpdateBanner />
 
       {/* Main Content */}
       {appState === 'loading' && (
-        <div className="loading-screen">
-          <div className="spinner" />
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-border border-t-accent" />
         </div>
       )}
 
@@ -229,7 +206,7 @@ function AppContent() {
                       <Navigate to="/" replace />
                     )
                   )
-                : <Navigate to="/conversation" replace />
+                : <Navigate to="/conversations" replace />
             }
           />
           <Route
@@ -249,24 +226,28 @@ function AppContent() {
                       <Navigate to="/" replace />
                     )
                   )
-                : <Navigate to="/conversation" replace />
+                : <Navigate to="/conversations" replace />
             }
           />
           <Route
-            path="/conversation"
+            path="/conversations"
             element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
           />
           <Route
-            path="/conversation/:username"
+            path="/conversations/:username"
+            element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/contacts"
             element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
           />
           <Route
             path="/settings"
-            element={isAuthenticated ? <Settings /> : <Navigate to="/login" replace />}
+            element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
           />
           <Route
             path="*"
-            element={<Navigate to={isAuthenticated ? '/conversation' : '/login'} replace />}
+            element={<Navigate to={isAuthenticated ? '/conversations' : '/login'} replace />}
           />
         </Routes>
       )}
@@ -274,7 +255,7 @@ function AppContent() {
       {/* Bottom Banners */}
       <OfflineIndicator />
       <InstallBanner />
-    </>
+    </div>
   );
 }
 
