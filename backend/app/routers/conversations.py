@@ -46,20 +46,28 @@ async def discover_conversations(
 ):
     rows = await conn.fetch(
         """
-        SELECT
-            cp.conversation_id,
-            MIN(other.user_id) AS other_user_id,
-            MIN(other_user.username) AS other_username,
-            MAX(cp.created_at) AS last_seen_at
-        FROM conversation_participants cp
-        JOIN conversation_participants other
-          ON other.conversation_id = cp.conversation_id
-         AND other.user_id <> cp.user_id
-        JOIN users other_user
-          ON other_user.id = other.user_id
-        WHERE cp.user_id = $1
-        GROUP BY cp.conversation_id
-        ORDER BY last_seen_at DESC
+        WITH ranked AS (
+            SELECT
+                cp.conversation_id,
+                other.user_id AS other_user_id,
+                other_user.username AS other_username,
+                cp.created_at AS last_seen_at,
+                ROW_NUMBER() OVER (
+                    PARTITION BY cp.conversation_id
+                    ORDER BY cp.created_at DESC, other.user_id ASC
+                ) AS row_rank
+            FROM conversation_participants cp
+            JOIN conversation_participants other
+              ON other.conversation_id = cp.conversation_id
+             AND other.user_id <> cp.user_id
+            JOIN users other_user
+              ON other_user.id = other.user_id
+            WHERE cp.user_id = $1
+        )
+        SELECT conversation_id, other_user_id, other_username, last_seen_at
+        FROM ranked
+        WHERE row_rank = 1
+        ORDER BY last_seen_at DESC, conversation_id ASC
         """,
         user.user_id,
     )
