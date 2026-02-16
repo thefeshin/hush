@@ -13,8 +13,7 @@
 
 English | [فارسی](README.fa.md) | [License](LICENSE)
 
-HUSH is a self-hosted private messaging vault focused on client-side cryptography and minimal server trust.
-The backend relays encrypted payloads and stores only metadata needed for routing, discovery, and session management.
+HUSH is a self-hosted private messaging vault focused on client-side cryptography and minimal server trust. The backend relays encrypted payloads and stores only metadata needed for routing, discovery, and session management. It’s built with Iran’s internet reality in mind: recurring shutdowns, filtering, packet disruption, and periods where even SMS can be restricted or unreliable. In those conditions, local messenger options are often assumed to be monitored, leaving few trusted internal choices for private communication.
 
 ## Table of Contents
 
@@ -74,6 +73,7 @@ The backend relays encrypted payloads and stores only metadata needed for routin
 ### Guided deployment (recommended)
 
 Linux/macOS:
+
 ```bash
 chmod +x ./hush.sh
 ./hush.sh
@@ -94,11 +94,13 @@ Development-only backend hot-reload bind mount lives in `docker-compose.override
 ## Local Development (Manual, No hush.sh local mode)
 
 1. Start PostgreSQL:
+
 ```bash
 docker run -d --name hush-postgres -e POSTGRES_USER=hush -e POSTGRES_PASSWORD=hush -e POSTGRES_DB=hush -p 5432:5432 postgres:16-alpine
 ```
 
 2. Start backend:
+
 ```bash
 cd backend
 python -m venv venv
@@ -109,12 +111,14 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Optional backend tests:
+
 ```bash
 pip install -r requirements-dev.txt
 pytest -q
 ```
 
 3. Start frontend:
+
 ```bash
 cd frontend
 npm install
@@ -128,6 +132,7 @@ Frontend runs at `http://localhost:3000` (configured in `frontend/vite.config.ts
 ### On internet-connected machine
 
 Linux/macOS:
+
 ```bash
 bash ./offline/build-bundle.sh --target all
 ```
@@ -135,6 +140,7 @@ bash ./offline/build-bundle.sh --target all
 Supported targets: Ubuntu 22.04 (jammy) amd64 and Ubuntu 24.04 (noble) amd64.
 
 This produces:
+
 - `offline/bundles/jammy-amd64/*` and/or `offline/bundles/noble-amd64/*`
 - each bundle includes Docker image tar, all required `.deb` packages, manifests, checksums, and deployment scripts
 - `.env` is intentionally excluded from bundles
@@ -142,10 +148,12 @@ This produces:
 ### Transfer to air-gapped machine
 
 Copy:
+
 - the full project directory (including `offline/bundles/<target>-amd64/`)
 - optional: copy `.env` if you want to reuse existing vault secrets
 
 SCP examples:
+
 ```bash
 # Copy full repository
 scp -r /path/to/hush user@AIRGAP_HOST:/opt/
@@ -157,6 +165,7 @@ scp /path/to/hush/.env user@AIRGAP_HOST:/opt/hush/
 ### On air-gapped machine
 
 Linux/macOS:
+
 ```bash
 bash ./offline/deploy-airgapped.sh
 ```
@@ -165,6 +174,7 @@ If `.env` already exists, deployment prompts you to use it or create a new one.
 If `.env` is missing, deployment creates it on the air-gapped machine and prints the 12 words.
 
 Manual equivalent steps:
+
 ```bash
 bash ./offline/install-system-deps.sh
 bash ./offline/init-airgap-env.sh
@@ -172,6 +182,7 @@ bash ./offline/deploy-offline.sh
 ```
 
 Optional secret rotation on air-gapped machine:
+
 ```bash
 bash ./offline/deploy-airgapped.sh --rotate-secrets
 ```
@@ -192,12 +203,14 @@ docker compose down -v
 ## Current Status
 
 P0 hardening is complete as of **February 10, 2026**:
+
 - strict server-side participant authorization is enforced for REST and WebSocket message paths,
 - WebSocket identity binding no longer trusts client-supplied `user_id`,
 - WebSocket query-token auth is removed (cookie-only),
 - raw vault-key storage in `sessionStorage` is removed (memory-only runtime cache).
 
 P1 hardening is also complete as of **February 10, 2026**:
+
 - vault lock now preserves PIN setup by default,
 - REST fallback send path is aligned to `POST /api/messages`,
 - offline bundle scripts generate supported `FAILURE_MODE=ip_temp`,
@@ -205,12 +218,14 @@ P1 hardening is also complete as of **February 10, 2026**:
 - `/health/db` now returns sanitized `503` on database failure.
 
 Post-P1 refactor/validation phases are complete as of **February 10, 2026**:
+
 - legacy thread/conversation compatibility layers were removed in favor of conversation-first frontend state,
 - realtime connection lifecycle is centralized under a single provider-owned path,
 - strict payload guards are enforced for REST/WebSocket encrypted fields (base64 validation, IV length, ciphertext caps),
 - WebSocket now applies per-connection subscription caps and inbound message rate guards.
 
 Breaking client contract changes:
+
 - WebSocket no longer accepts `?token=...`.
 - `subscribe_user` payload is now `{"type":"subscribe_user"}` (no `user_id` field).
 
