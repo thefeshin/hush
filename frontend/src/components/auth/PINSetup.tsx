@@ -94,11 +94,11 @@ export function PINSetup({ onSuccess, onCancel, isLoading = false }: PINSetupPro
             )}
           </div>
 
-          {error && <div className="mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error">{error}</div>}
+          {error && <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary">{error}</div>}
 
           <button
             type="submit"
-            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isLoading}
           >
             {isLoading ? 'Setting up...' : (isConfirming ? 'Confirm PIN' : 'Continue')}

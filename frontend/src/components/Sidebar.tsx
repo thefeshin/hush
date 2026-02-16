@@ -11,6 +11,7 @@ import { useCrypto } from '../crypto/CryptoContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { clearAllData } from '../services/storage';
 import { clearQueue } from '../services/messageQueue';
+import { MessageCirclePlus, Settings as SettingsIcon, Shield, UserCircle2 } from 'lucide-react';
 import { AddContactModal } from './AddContactModal';
 import { ConnectionStatus } from './ConnectionStatus';
 
@@ -63,14 +64,14 @@ export function Sidebar({ isConversationRoute = false }: SidebarProps) {
             className="cursor-pointer rounded bg-transparent p-2 text-xl text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-text-primary"
             title="Your Profile"
           >
-            <span>&#x1F464;</span>
+            <UserCircle2 className="h-5 w-5" />
           </button>
           <button
             onClick={handleLogout}
             className="cursor-pointer rounded bg-transparent p-2 text-xl text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-text-primary"
             title="Lock Vault"
           >
-            <span>&#x1F512;</span>
+            <Shield className="h-5 w-5" />
           </button>
         </div>
       </div>
@@ -78,7 +79,7 @@ export function Sidebar({ isConversationRoute = false }: SidebarProps) {
       {showProfile && user && (
         <div className="border-b border-border bg-bg-tertiary p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent font-semibold text-white">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent font-semibold text-zinc-900">
               {user.username.charAt(0).toUpperCase()}
             </div>
             <div className="flex flex-col">
@@ -86,10 +87,10 @@ export function Sidebar({ isConversationRoute = false }: SidebarProps) {
             </div>
             <button
               onClick={() => navigate('/settings')}
-              className="ml-auto cursor-pointer rounded bg-transparent p-2 text-xl text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-accent"
+              className="ml-auto cursor-pointer rounded bg-transparent p-2 text-xl text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-text-primary"
               title="Settings"
             >
-              &#9881;
+              <SettingsIcon className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -128,7 +129,7 @@ export function Sidebar({ isConversationRoute = false }: SidebarProps) {
                     navigate(`/conversation/${encodeURIComponent(conversation.participantUsername)}`);
                   }}
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-white">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-zinc-900">
                     {conversation.participantUsername[0].toUpperCase()}
                   </div>
                   <div className="ml-3 min-w-0 flex-1">
@@ -138,7 +139,7 @@ export function Sidebar({ isConversationRoute = false }: SidebarProps) {
                     <div className="text-xs text-text-secondary">{formatTime(conversation.lastMessageAt)}</div>
                   </div>
                   {conversation.unreadCount > 0 && (
-                    <div className="ml-2 rounded-2xl bg-accent px-2 py-0.5 text-xs font-bold text-white">{conversation.unreadCount}</div>
+                    <div className="ml-2 rounded-2xl bg-accent px-2 py-0.5 text-xs font-bold text-zinc-900">{conversation.unreadCount}</div>
                   )}
                 </div>
               ))
@@ -149,10 +150,11 @@ export function Sidebar({ isConversationRoute = false }: SidebarProps) {
         {activeTab === 'contacts' && (
           <div className="flex flex-col">
             <button
-              className="mx-4 my-3 cursor-pointer rounded-lg border border-dashed border-border bg-transparent py-3 text-sm text-accent transition-colors hover:bg-bg-tertiary"
+              className="mx-4 my-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-transparent py-3 text-sm text-accent transition-colors hover:bg-bg-tertiary"
               onClick={() => setShowAddContact(true)}
             >
-              + Add Contact
+              <MessageCirclePlus className="h-4 w-4" />
+              Add Contact
             </button>
 
             {contacts.length === 0 ? (
@@ -206,7 +208,7 @@ function ContactItem({
 
   return (
     <div className="flex items-center border-b border-border px-4 py-3 max-[480px]:px-3 max-[480px]:py-2">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-white">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-zinc-900">
         {contact.username[0].toUpperCase()}
       </div>
       <div className="ml-3 min-w-0 flex-1">
@@ -217,7 +219,7 @@ function ContactItem({
         onClick={handleStartChat}
         title="Start chat"
       >
-        &#x1F4AC;
+        <MessageCirclePlus className="h-5 w-5" />
       </button>
     </div>
   );

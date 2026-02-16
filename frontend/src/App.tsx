@@ -34,7 +34,7 @@ function showPinSetupReminder(onOpenSettings: () => void) {
         Set up a PIN to avoid entering your 12 words each time.
       </div>
       <button
-        className="cursor-pointer rounded-lg border-0 bg-green-500 px-2.5 py-1.5 font-bold text-green-950 hover:bg-green-400"
+        className="cursor-pointer rounded-lg border border-zinc-600 bg-zinc-200 px-2.5 py-1.5 font-bold text-zinc-900 hover:bg-zinc-100"
         onClick={() => {
           toast.dismiss(t.id);
           onOpenSettings();

@@ -9,6 +9,7 @@ import { useConversationStore } from "../stores/conversationStore";
 import { useMessageStore } from "../stores/messageStore";
 import { useCrypto } from "../crypto/CryptoContext";
 import { getSyncService } from "../services/sync";
+import { ChevronLeft } from 'lucide-react';
 import { useConversationSubscription } from "../hooks/useConversationSubscription";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
@@ -73,9 +74,9 @@ export function ConversationView({ conversationId }: Props) {
           }}
           aria-label="Back to conversations"
         >
-          &lt;
+          <ChevronLeft className="h-4 w-4" />
         </button>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-white md:h-12 md:w-12 md:text-xl">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-zinc-900 md:h-12 md:w-12 md:text-xl">
           {conversation.participantUsername[0].toUpperCase()}
         </div>
         <div className="ml-1">

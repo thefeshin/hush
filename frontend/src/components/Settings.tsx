@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronLeft } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { isPINEnabled } from '../services/deviceSettings';
@@ -27,8 +28,8 @@ const subtitle = 'mb-8 text-center text-text-secondary';
 const inputGroup = 'mb-4';
 const label = 'mb-2 block font-medium';
 const input = 'w-full rounded-lg border border-border bg-bg-primary px-4 py-3 text-base text-text-primary outline-none focus:border-accent';
-const errorClass = 'mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error';
-const primaryButton = 'w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
+const errorClass = 'mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary';
+const primaryButton = 'w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
 const linkButton = 'mt-4 cursor-pointer border-0 bg-transparent text-sm text-accent underline hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 export function Settings({ onBack }: SettingsProps) {
@@ -330,10 +331,11 @@ export function Settings({ onBack }: SettingsProps) {
       <div className="flex-1 overflow-y-auto bg-bg-primary">
         <div className="flex items-center gap-4 border-b border-border bg-bg-secondary px-6 py-4">
           <button
-            className="cursor-pointer border-0 bg-transparent p-2 text-xl text-accent transition-colors hover:text-accent-hover"
+            className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-2 text-sm font-medium text-accent transition-colors hover:text-accent-hover"
             onClick={handleBack}
           >
-            &#8592; Back
+            <ChevronLeft className="h-4 w-4" />
+            Back
           </button>
           <h1 className="text-2xl text-text-primary">Settings</h1>
         </div>
@@ -372,7 +374,7 @@ export function Settings({ onBack }: SettingsProps) {
                       Change PIN
                     </button>
                     <button
-                      className="cursor-pointer rounded-lg border-0 bg-error px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-80"
+                      className="cursor-pointer rounded-lg border border-zinc-500 bg-zinc-700 px-6 py-3 text-sm font-semibold text-zinc-100 transition-colors hover:bg-zinc-600"
                       onClick={() => {
                         setError(null);
                         setState('disable-pin');
@@ -383,7 +385,7 @@ export function Settings({ onBack }: SettingsProps) {
                   </>
                 ) : (
                   <button
-                    className="cursor-pointer rounded-lg border-0 bg-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
+                    className="cursor-pointer rounded-lg border-0 bg-accent px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-accent-hover"
                     onClick={() => setState('enable-pin')}
                   >
                     Enable PIN
@@ -400,7 +402,7 @@ export function Settings({ onBack }: SettingsProps) {
           <section className="mb-6 rounded-lg bg-bg-secondary p-6">
             <h2 className="mb-4 border-b border-border pb-2 text-lg text-text-primary">Actions</h2>
             <button
-              className="w-full cursor-pointer rounded-lg border-0 bg-error px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-80"
+              className="w-full cursor-pointer rounded-lg border border-zinc-500 bg-zinc-700 px-6 py-3 text-sm font-semibold text-zinc-100 transition-colors hover:bg-zinc-600"
               onClick={handleLockVault}
             >
               Lock Vault

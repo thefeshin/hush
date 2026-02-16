@@ -3,6 +3,7 @@
  */
 
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { useContactStore } from '../stores/contactStore';
 import { useAuthStore } from '../stores/authStore';
 import { useCrypto } from '../crypto/CryptoContext';
@@ -96,7 +97,9 @@ export function AddContactModal({ onClose }: Props) {
       <div className="m-4 w-full max-w-md rounded-2xl bg-bg-secondary p-6" onClick={e => e.stopPropagation()}>
         <div className="mb-6 flex items-center justify-between">
           <h2>Add Contact</h2>
-          <button className="cursor-pointer border-0 bg-transparent p-0 text-2xl leading-none text-text-secondary hover:text-text-primary" onClick={onClose}>&times;</button>
+          <button className="cursor-pointer border-0 bg-transparent p-0 text-text-secondary hover:text-text-primary" onClick={onClose}>
+            <X className="h-6 w-6" />
+          </button>
         </div>
 
         {!foundUser ? (
@@ -120,13 +123,13 @@ export function AddContactModal({ onClose }: Props) {
             </div>
 
             {error && (
-              <div className="mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error">{error}</div>
+              <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary">{error}</div>
             )}
 
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-sm text-text-primary transition-colors hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-sm text-text-primary transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={onClose}
                 disabled={isSearching}
               >
@@ -134,7 +137,7 @@ export function AddContactModal({ onClose }: Props) {
               </button>
               <button
                 type="submit"
-                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isSearching || !username.trim()}
               >
                 {isSearching ? 'Searching...' : 'Search'}
@@ -144,7 +147,7 @@ export function AddContactModal({ onClose }: Props) {
         ) : (
           <div className="py-4">
             <div className="mb-4 flex items-center gap-4 rounded-lg bg-bg-primary p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-xl font-semibold text-white">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-xl font-semibold text-zinc-900">
                 {foundUser.username.charAt(0).toUpperCase()}
               </div>
               <div className="flex flex-col">
@@ -153,13 +156,13 @@ export function AddContactModal({ onClose }: Props) {
             </div>
 
             {error && (
-              <div className="mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error">{error}</div>
+              <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary">{error}</div>
             )}
 
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-sm text-text-primary transition-colors hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-4 py-3 text-sm text-text-primary transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleReset}
                 disabled={isAdding}
               >
@@ -167,7 +170,7 @@ export function AddContactModal({ onClose }: Props) {
               </button>
               <button
                 type="button"
-                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-lg border-0 bg-accent px-4 py-3 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleAdd}
                 disabled={isAdding}
               >

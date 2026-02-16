@@ -114,7 +114,7 @@ export function RegisterForm({ vaultToken, onSuccess, onSwitchToLogin, isLoading
               autoCapitalize="off"
               className={inputClassName}
             />
-            {usernameError && <span className="mt-1 block text-xs text-error">{usernameError}</span>}
+            {usernameError && <span className="mt-1 block text-xs text-text-secondary">{usernameError}</span>}
             <span className="mt-1 block text-xs text-text-secondary">Letters, numbers, underscores only</span>
           </div>
 
@@ -130,7 +130,7 @@ export function RegisterForm({ vaultToken, onSuccess, onSwitchToLogin, isLoading
               autoComplete="new-password"
               className={inputClassName}
             />
-            {passwordError && <span className="mt-1 block text-xs text-error">{passwordError}</span>}
+            {passwordError && <span className="mt-1 block text-xs text-text-secondary">{passwordError}</span>}
           </div>
 
           <div className="mb-4">
@@ -145,18 +145,18 @@ export function RegisterForm({ vaultToken, onSuccess, onSwitchToLogin, isLoading
               autoComplete="new-password"
               className={inputClassName}
             />
-            {confirmError && <span className="mt-1 block text-xs text-error">{confirmError}</span>}
+            {confirmError && <span className="mt-1 block text-xs text-text-secondary">{confirmError}</span>}
           </div>
 
           {error && (
-            <div className="mb-4 rounded-lg border border-error bg-error/10 p-3 text-sm text-error">
+            <div className="mb-4 rounded-lg border border-error bg-zinc-900 p-3 text-sm text-text-secondary">
               {error}
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full cursor-pointer rounded-lg border-0 bg-accent px-4 py-4 text-base font-semibold text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isLoading || !isValid}
           >
             {isLoading ? 'Creating Account...' : 'Create Account'}

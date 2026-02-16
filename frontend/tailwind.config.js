@@ -4,17 +4,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        'bg-primary': '#1a1a2e',
-        'bg-secondary': '#16213e',
-        'bg-tertiary': '#0f3460',
-        'text-primary': '#eaeaea',
-        'text-secondary': '#a0a0a0',
-        accent: '#e94560',
-        'accent-hover': '#ff6b6b',
-        success: '#4ade80',
-        error: '#ef4444',
-        border: '#2a2a4a',
-        warning: '#f59e0b',
+        'bg-primary': '#09090b',
+        'bg-secondary': '#111113',
+        'bg-tertiary': '#18181b',
+        'text-primary': '#f4f4f5',
+        'text-secondary': '#a1a1aa',
+        accent: '#d4d4d8',
+        'accent-hover': '#fafafa',
+        success: '#d4d4d8',
+        error: '#a1a1aa',
+        border: '#27272a',
+        warning: '#c4c4c8',
       },
       animation: {
         spin: 'spin 1s linear infinite',

@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { AlertTriangle, Check, Loader2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -54,8 +55,8 @@ export function MessageList({ messages, currentUserId }: Props) {
         );
 
         const messageContainerClass = `flex max-w-[85%] flex-col md:max-w-[70%] ${isOwn ? 'self-end' : 'self-start'} ${message.status === 'sending' ? 'opacity-70' : ''}`;
-        const bubbleClass = `break-words rounded-2xl px-4 py-3 ${isOwn ? 'rounded-br bg-accent' : 'rounded-bl bg-bg-tertiary'} ${message.status === 'failed' ? 'border border-error' : ''}`;
-        const metaClass = `mt-1 flex justify-end gap-2 text-[0.7rem] ${isOwn ? 'text-white/70' : 'text-text-secondary'}`;
+        const bubbleClass = `break-words rounded-2xl px-4 py-3 ${isOwn ? 'rounded-br bg-accent text-zinc-900' : 'rounded-bl bg-bg-tertiary'} ${message.status === 'failed' ? 'border border-error' : ''}`;
+        const metaClass = `mt-1 flex justify-end gap-2 text-[0.7rem] ${isOwn ? 'text-zinc-700' : 'text-text-secondary'}`;
 
         return (
           <div key={message.id} className={messageContainerClass}>
@@ -67,10 +68,10 @@ export function MessageList({ messages, currentUserId }: Props) {
               <div className={metaClass}>
                 <span>{formatTime(message.timestamp)}</span>
                 {isOwn && (
-                  <span className="text-[0.8rem]">
-                    {message.status === 'sending' && '\u23F3'}
-                    {message.status === 'sent' && '\u2713'}
-                    {message.status === 'failed' && '\u26A0'}
+                  <span className="inline-flex items-center">
+                    {message.status === 'sending' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {message.status === 'sent' && <Check className="h-3.5 w-3.5" />}
+                    {message.status === 'failed' && <AlertTriangle className="h-3.5 w-3.5" />}
                   </span>
                 )}
               </div>
