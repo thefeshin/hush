@@ -238,6 +238,10 @@ function AppContent() {
             element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
           />
           <Route
+            path="/conversations/id/:conversationId"
+            element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
+          />
+          <Route
             path="/contacts"
             element={isAuthenticated ? <Chat /> : <Navigate to="/login" replace />}
           />

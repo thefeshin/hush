@@ -46,25 +46,51 @@ async def discover_conversations(
 ):
     rows = await conn.fetch(
         """
-        WITH ranked AS (
+        WITH direct_ranked AS (
             SELECT
-                cp.conversation_id,
+                c.id AS conversation_id,
+                c.kind,
+                c.group_name,
                 other.user_id AS other_user_id,
                 other_user.username AS other_username,
                 cp.created_at AS last_seen_at,
                 ROW_NUMBER() OVER (
-                    PARTITION BY cp.conversation_id
+                    PARTITION BY c.id
                     ORDER BY cp.created_at DESC, other.user_id ASC
                 ) AS row_rank
-            FROM conversation_participants cp
+            FROM conversations c
+            JOIN conversation_participants cp
+              ON cp.conversation_id = c.id
             JOIN conversation_participants other
               ON other.conversation_id = cp.conversation_id
              AND other.user_id <> cp.user_id
             JOIN users other_user
               ON other_user.id = other.user_id
             WHERE cp.user_id = $1
+              AND c.kind = 'direct'
+        ),
+        grouped AS (
+            SELECT
+                c.id AS conversation_id,
+                c.kind,
+                c.group_name,
+                NULL::UUID AS other_user_id,
+                NULL::TEXT AS other_username,
+                MAX(cp.created_at) AS last_seen_at,
+                1 AS row_rank
+            FROM conversations c
+            JOIN conversation_participants cp
+              ON cp.conversation_id = c.id
+            WHERE cp.user_id = $1
+              AND c.kind = 'group'
+            GROUP BY c.id, c.kind, c.group_name
+        ),
+        ranked AS (
+            SELECT * FROM direct_ranked
+            UNION ALL
+            SELECT * FROM grouped
         )
-        SELECT conversation_id, other_user_id, other_username, last_seen_at
+        SELECT conversation_id, kind, group_name, other_user_id, other_username, last_seen_at
         FROM ranked
         WHERE row_rank = 1
         ORDER BY last_seen_at DESC, conversation_id ASC
@@ -75,7 +101,9 @@ async def discover_conversations(
     conversations = [
         {
             "conversation_id": str(row["conversation_id"]),
-            "other_user_id": str(row["other_user_id"]),
+            "kind": row["kind"],
+            "group_name": row["group_name"],
+            "other_user_id": str(row["other_user_id"]) if row["other_user_id"] else None,
             "other_username": row["other_username"],
         }
         for row in rows

@@ -203,8 +203,10 @@ export async function getSalt(): Promise<string> {
 export async function discoverConversations(): Promise<
   Array<{
     conversation_id: string;
-    other_user_id: string;
-    other_username: string;
+    kind?: 'direct' | 'group';
+    group_name?: string | null;
+    other_user_id: string | null;
+    other_username: string | null;
   }>
 > {
   const maxAttempts = 3;
@@ -256,12 +258,69 @@ export async function discoverConversations(): Promise<
   if (Array.isArray(data.conversation_ids)) {
     return data.conversation_ids.map((conversationId: string) => ({
       conversation_id: conversationId,
-      other_user_id: "",
-      other_username: "",
+      kind: 'direct',
+      group_name: null,
+      other_user_id: null,
+      other_username: null,
     }));
   }
 
   return [];
+}
+
+export interface GroupCreatePayload {
+  name: string;
+  member_ids: string[];
+  encrypted_key_envelope?: string;
+}
+
+export interface GroupSummary {
+  id: string;
+  conversation_id: string;
+  name: string;
+  key_epoch: number;
+  created_at: string;
+}
+
+export interface GroupState {
+  id: string;
+  conversation_id: string;
+  name: string;
+  created_by: string;
+  key_epoch: number;
+  members: Array<{
+    user_id: string;
+    role: 'owner' | 'admin' | 'member';
+    joined_at: string;
+  }>;
+  my_encrypted_key_envelope?: string | null;
+}
+
+export async function createGroup(payload: GroupCreatePayload): Promise<GroupSummary> {
+  const response = await fetch(`${API_BASE}/groups`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to create group');
+  }
+
+  return response.json();
+}
+
+export async function getGroupState(groupId: string): Promise<GroupState> {
+  const response = await fetch(`${API_BASE}/groups/${groupId}/state`, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch group state');
+  }
+
+  return response.json();
 }
 
 /**

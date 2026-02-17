@@ -38,6 +38,21 @@ async def _init_schema(conn: asyncpg.Connection):
     """)
 
     await conn.execute("""
+        ALTER TABLE conversations
+        ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'direct'
+    """)
+
+    await conn.execute("""
+        ALTER TABLE conversations
+        ADD COLUMN IF NOT EXISTS group_name VARCHAR(120)
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_conversations_kind
+            ON conversations(kind)
+    """)
+
+    await conn.execute("""
         CREATE TABLE IF NOT EXISTS blocked_ips (
             ip_address INET PRIMARY KEY,
             blocked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -125,6 +140,11 @@ async def _init_schema(conn: asyncpg.Connection):
     """)
 
     await conn.execute("""
+        ALTER TABLE messages
+        ADD COLUMN IF NOT EXISTS group_epoch INTEGER
+    """)
+
+    await conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
             ON messages(conversation_id)
     """)
@@ -132,6 +152,54 @@ async def _init_schema(conn: asyncpg.Connection):
     await conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_messages_created_at
             ON messages(conversation_id, created_at)
+    """)
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS groups (
+            id UUID PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+            created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            key_epoch INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+    """)
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS group_members (
+            group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            role VARCHAR(20) NOT NULL DEFAULT 'member',
+            joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            removed_at TIMESTAMP WITH TIME ZONE,
+            PRIMARY KEY (group_id, user_id)
+        )
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_group_members_group_active
+            ON group_members(group_id, user_id)
+            WHERE removed_at IS NULL
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_group_members_user_active
+            ON group_members(user_id, group_id)
+            WHERE removed_at IS NULL
+    """)
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS group_key_envelopes (
+            group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            epoch INTEGER NOT NULL,
+            encrypted_key_blob TEXT NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            PRIMARY KEY (group_id, user_id, epoch)
+        )
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_group_key_envelopes_lookup
+            ON group_key_envelopes(group_id, user_id, epoch DESC)
     """)
 
 

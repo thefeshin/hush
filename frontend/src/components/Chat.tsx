@@ -20,7 +20,7 @@ export function Chat() {
   const { contacts, loadAllContacts } = useContactStore();
   const { conversations, activeConversationId, loadAllConversations, discoverConversations, setActiveConversation } = useConversationStore();
   const { decryptContacts, decryptIdentity } = useCrypto();
-  const { username } = useParams<{ username?: string }>();
+  const { username, conversationId: routeConversationId } = useParams<{ username?: string; conversationId?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const [hasDiscovered, setHasDiscovered] = useState(false);
@@ -28,7 +28,7 @@ export function Chat() {
   const activeTab: ChatTab = VALID_TABS.includes(pathRoot as ChatTab)
     ? (pathRoot as ChatTab)
     : 'conversations';
-  const isConversationRoute = activeTab === 'conversations' && Boolean(username);
+  const isConversationRoute = activeTab === 'conversations' && (Boolean(username) || Boolean(routeConversationId));
 
   // Load contacts on mount
   useEffect(() => {
@@ -66,7 +66,25 @@ export function Chat() {
   }, [user, hasDiscovered, discoverConversations]);
 
   useEffect(() => {
-    if (activeTab !== 'conversations' || !username) {
+    if (activeTab !== 'conversations') {
+      setActiveConversation(null);
+      return;
+    }
+
+    if (routeConversationId) {
+      const byId = conversations.find((conversation) => conversation.conversationId === routeConversationId);
+      if (byId) {
+        if (byId.conversationId !== activeConversationId) {
+          setActiveConversation(byId.conversationId);
+        }
+        return;
+      }
+      setActiveConversation(null);
+      navigate('/conversations', { replace: true });
+      return;
+    }
+
+    if (!username) {
       setActiveConversation(null);
       return;
     }
@@ -91,7 +109,7 @@ export function Chat() {
 
     setActiveConversation(null);
     navigate('/conversations', { replace: true });
-  }, [activeTab, username, conversations, activeConversationId, setActiveConversation, navigate]);
+  }, [activeTab, username, routeConversationId, conversations, activeConversationId, setActiveConversation, navigate]);
 
   if (!user) {
     return (

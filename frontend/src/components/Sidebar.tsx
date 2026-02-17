@@ -5,13 +5,16 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
 import { useContactStore, Contact } from '../stores/contactStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { clearAllData } from '../services/storage';
+import { clearAllData, saveConversation } from '../services/storage';
 import { clearQueue } from '../services/messageQueue';
+import { createGroup } from '../services/api';
+import type { ConversationMetadata } from '../types/crypto';
 import { ContactRound, Lock, MessageCircle, MessageCirclePlus, Settings as SettingsIcon } from 'lucide-react';
 import { AddContactModal } from './AddContactModal';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -42,7 +45,7 @@ export function Sidebar({ isConversationRoute = false, activeTab }: SidebarProps
 
   const user = useAuthStore(state => state.user);
   const { logout } = useAuthStore();
-  const { lockVault } = useCrypto();
+  const { lockVault, encryptIdentity } = useCrypto();
   const { disconnect } = useWebSocket();
   const navigate = useNavigate();
 
@@ -63,6 +66,85 @@ export function Sidebar({ isConversationRoute = false, activeTab }: SidebarProps
     await clearAllData();
     await lockVault();  // lockVault is now async
     await logout();
+  };
+
+  const handleCreateGroup = async () => {
+    if (!user) {
+      return;
+    }
+
+    if (contacts.length < 2) {
+      toast.error('Add at least two contacts to create a group');
+      return;
+    }
+
+    const name = window.prompt('Group name');
+    if (!name || !name.trim()) {
+      return;
+    }
+
+    const idList = window.prompt(
+      'Enter member usernames separated by commas',
+      contacts.slice(0, 3).map((contact) => contact.username).join(', '),
+    );
+    if (!idList) {
+      return;
+    }
+
+    const wanted = new Set(
+      idList
+        .split(',')
+        .map((entry) => entry.trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+    const memberIds = contacts
+      .filter((contact) => wanted.has(contact.username.toLowerCase()))
+      .map((contact) => contact.id);
+
+    if (memberIds.length === 0) {
+      toast.error('No matching contacts found for group members');
+      return;
+    }
+
+    try {
+      const group = await createGroup({
+        name: name.trim(),
+        member_ids: memberIds,
+      });
+
+      const metadata: ConversationMetadata = {
+        participants: [user.id, ...memberIds],
+        kind: 'group',
+        group_name: group.name,
+        key_epoch: group.key_epoch,
+        created_by: {
+          user_id: user.id,
+          display_name: user.username,
+        },
+        created_at: Date.now(),
+      };
+      const encryptedMetadata = await encryptIdentity(metadata);
+      await saveConversation(group.conversation_id, encryptedMetadata, Date.now());
+
+      const { upsertConversation } = useConversationStore.getState();
+      upsertConversation({
+        conversationId: group.conversation_id,
+        kind: 'group',
+        participantId: '',
+        participantUsername: group.name,
+        keyEpoch: group.key_epoch,
+        createdAt: new Date(group.created_at).getTime(),
+        lastMessageAt: Date.now(),
+        unreadCount: 0,
+      });
+
+      setActiveConversation(group.conversation_id);
+      navigate(`/conversations/id/${group.conversation_id}`);
+      toast.success('Group created');
+    } catch {
+      toast.error('Failed to create group');
+    }
   };
 
   const formatTime = (timestamp: number) => {
@@ -119,7 +201,7 @@ export function Sidebar({ isConversationRoute = false, activeTab }: SidebarProps
                   className={`flex cursor-pointer items-center border-b border-border px-4 py-3 transition-colors max-[480px]:px-3 max-[480px]:py-2 ${conversation.conversationId === activeConversationId ? 'border-l-[3px] border-l-accent bg-bg-tertiary' : 'hover:bg-bg-tertiary'}`}
                   onClick={() => {
                     setActiveConversation(conversation.conversationId);
-                    navigate(`/conversations/${encodeURIComponent(conversation.participantUsername)}`);
+                    navigate(`/conversations/id/${conversation.conversationId}`);
                   }}
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-body font-bold text-zinc-900">
@@ -159,6 +241,13 @@ export function Sidebar({ isConversationRoute = false, activeTab }: SidebarProps
             >
               <MessageCirclePlus className="h-4 w-4" />
               Add Contact
+            </button>
+            <button
+              className="mx-4 mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-bg-primary py-3 text-body text-text-primary transition-colors hover:bg-bg-tertiary"
+              onClick={handleCreateGroup}
+            >
+              <MessageCircle className="h-4 w-4" />
+              New Group
             </button>
 
             {contacts.length === 0 ? (
@@ -255,7 +344,7 @@ function ContactItem({
       getConversationId,
       encryptIdentity
     );
-    navigate(`/conversations/${encodeURIComponent(conversation.participantUsername)}`);
+    navigate(`/conversations/id/${conversation.conversationId}`);
   };
 
   return (

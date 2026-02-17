@@ -26,6 +26,12 @@ export interface ConversationKey {
   conversationId: string;
 }
 
+export interface GroupKey {
+  key: CryptoKey;
+  groupId: string;
+  epoch: number;
+}
+
 // KDF parameters
 export interface KdfParams {
   salt: Base64String;
@@ -41,11 +47,17 @@ export interface MessagePayload {
   sender_name: string;
   content: string;
   timestamp: number;
+  conversation_kind?: 'direct' | 'group';
+  group_id?: string;
+  group_epoch?: number;
 }
 
 // Conversation metadata payload (before encryption)
 export interface ConversationMetadata {
-  participants: [string, string];
+  participants: string[];
+  kind?: 'direct' | 'group';
+  group_name?: string;
+  key_epoch?: number;
   created_by: {
     user_id: string;
     display_name: string;

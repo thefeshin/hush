@@ -88,4 +88,35 @@ describe('WebSocketService message ack handling', () => {
 
     await expect(sendPromise).resolves.toEqual({ id: 'server-message-id' });
   });
+
+  it('includes group_epoch in outgoing group message payload', async () => {
+    const { wsService } = await import('./websocket');
+
+    const connectPromise = wsService.connect();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+    await connectPromise;
+
+    const sendPromise = wsService.sendMessage(
+      'group-conversation-1',
+      { ciphertext: 'ciphertext', iv: 'iv' },
+      undefined,
+      5,
+    );
+
+    const sentPayloadRaw = socket.sent.find((payload) => JSON.parse(payload).type === 'message');
+    expect(sentPayloadRaw).toBeTruthy();
+    const sentPayload = JSON.parse(sentPayloadRaw as string);
+    expect(sentPayload.group_epoch).toBe(5);
+
+    socket.serverMessage({
+      type: 'message_sent',
+      id: 'group-message-id',
+      conversation_id: 'group-conversation-1',
+      client_message_id: sentPayload.client_message_id,
+      created_at: new Date().toISOString(),
+    });
+
+    await expect(sendPromise).resolves.toEqual({ id: 'group-message-id' });
+  });
 });

@@ -256,6 +256,7 @@ async def test_handle_message_delivers_to_recipient_without_existing_subscriptio
         fetchrow_value={
             "id": persisted_message_id,
             "created_at": datetime.now(timezone.utc),
+            "group_epoch": None,
         },
     )
     pool = FakePool(conn)
@@ -280,6 +281,7 @@ async def test_handle_message_delivers_to_recipient_without_existing_subscriptio
     assert broadcast_payload["conversation_id"] == str(conversation_id)
     assert broadcast_payload["sender_id"] == str(sender_id)
     assert broadcast_payload["client_message_id"] == "client-123"
+    assert broadcast_payload["group_epoch"] is None
 
     assert len(fake_manager.personal) == 1
     assert fake_manager.personal[0]["type"] == "message_sent"
@@ -288,10 +290,7 @@ async def test_handle_message_delivers_to_recipient_without_existing_subscriptio
     assert fake_manager.personal[0]["client_message_id"] == "client-123"
 
     assert fake_manager.user_auto_subscriptions == [(str(recipient_id), str(conversation_id))]
-    assert len(fake_manager.user_deliveries) == 1
-    delivered_user_id, delivered_payload = fake_manager.user_deliveries[0]
-    assert delivered_user_id == str(recipient_id)
-    assert delivered_payload == broadcast_payload
+    assert fake_manager.user_deliveries == []
 
 
 @pytest.mark.asyncio
@@ -319,6 +318,7 @@ async def test_create_message_rest_delivers_realtime_to_recipient(monkeypatch):
             "id": persisted_message_id,
             "conversation_id": conversation_id,
             "sender_id": sender_id,
+            "group_epoch": None,
             "ciphertext": b"foo",
             "iv": b"123456789012",
             "created_at": created_at,
@@ -341,6 +341,7 @@ async def test_create_message_rest_delivers_realtime_to_recipient(monkeypatch):
     assert str(response.id) == str(persisted_message_id)
     assert str(response.conversation_id) == str(conversation_id)
     assert str(response.sender_id) == str(sender_id)
+    assert response.group_epoch is None
 
     assert len(fake_manager.broadcasts) == 1
     broadcast_conversation_id, broadcast_payload = fake_manager.broadcasts[0]
@@ -348,6 +349,7 @@ async def test_create_message_rest_delivers_realtime_to_recipient(monkeypatch):
     assert broadcast_payload["id"] == str(persisted_message_id)
     assert broadcast_payload["conversation_id"] == str(conversation_id)
     assert broadcast_payload["sender_id"] == str(sender_id)
+    assert broadcast_payload["group_epoch"] is None
     assert broadcast_payload["ciphertext"] == "Zm9v"
     assert broadcast_payload["iv"] == "MTIzNDU2Nzg5MDEy"
 
@@ -356,3 +358,88 @@ async def test_create_message_rest_delivers_realtime_to_recipient(monkeypatch):
     delivered_user_id, delivered_payload = fake_manager.user_deliveries[0]
     assert delivered_user_id == str(recipient_id)
     assert delivered_payload == broadcast_payload
+
+
+@pytest.mark.asyncio
+async def test_handle_message_rejects_invalid_group_epoch(monkeypatch):
+    fake_manager = FakeWsManager()
+    monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
+
+    conn = FakeConnection()
+    pool = FakePool(conn)
+    websocket = FakeWebSocket(user_id=uuid4())
+
+    await ws_router.handle_message(
+        websocket,
+        {
+            "conversation_id": str(uuid4()),
+            "group_epoch": "not-an-int",
+            "ciphertext": "Zm9v",
+            "iv": "MTIzNDU2Nzg5MDEy",
+        },
+        pool,
+    )
+
+    assert fake_manager.personal[-1]["type"] == "error"
+    assert fake_manager.personal[-1]["code"] == "invalid_group_epoch"
+
+
+@pytest.mark.asyncio
+async def test_handle_message_rejects_stale_group_epoch(monkeypatch):
+    fake_manager = FakeWsManager()
+    monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
+
+    conversation_id = uuid4()
+    conn = FakeConnection(fetchval_side_effect=[True, "group", 3])
+    pool = FakePool(conn)
+    websocket = FakeWebSocket(user_id=uuid4())
+
+    await ws_router.handle_message(
+        websocket,
+        {
+            "conversation_id": str(conversation_id),
+            "group_epoch": 2,
+            "ciphertext": "Zm9v",
+            "iv": "MTIzNDU2Nzg5MDEy",
+        },
+        pool,
+    )
+
+    assert fake_manager.personal[-1]["type"] == "error"
+    assert fake_manager.personal[-1]["code"] == "stale_group_epoch"
+
+
+@pytest.mark.asyncio
+async def test_handle_message_accepts_group_epoch_and_broadcasts(monkeypatch):
+    fake_manager = FakeWsManager()
+    monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
+
+    conversation_id = uuid4()
+    persisted_message_id = uuid4()
+    conn = FakeConnection(
+        fetchval_side_effect=[True, "group", 4],
+        fetchrow_value={
+            "id": persisted_message_id,
+            "created_at": datetime.now(timezone.utc),
+            "group_epoch": 4,
+        },
+    )
+    pool = FakePool(conn)
+    websocket = FakeWebSocket(user_id=uuid4())
+
+    await ws_router.handle_message(
+        websocket,
+        {
+            "conversation_id": str(conversation_id),
+            "group_epoch": 4,
+            "client_message_id": "c-1",
+            "ciphertext": "Zm9v",
+            "iv": "MTIzNDU2Nzg5MDEy",
+        },
+        pool,
+    )
+
+    assert len(fake_manager.broadcasts) == 1
+    _, broadcast_payload = fake_manager.broadcasts[0]
+    assert broadcast_payload["id"] == str(persisted_message_id)
+    assert broadcast_payload["group_epoch"] == 4

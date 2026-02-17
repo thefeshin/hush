@@ -6,10 +6,11 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { deriveVaultKey, clearKeyMaterial } from './kdf';
 import { deriveConversationKey, computeConversationId } from './conversation-key';
+import { deriveGroupKey } from './group-key';
 import { deriveIdentityKey, deriveContactsKey } from './identity-key';
 import { encrypt, decrypt, encryptJSON, decryptJSON } from './aes';
 import { clearStoredVaultKey, clearSessionVaultKey } from '../services/vaultStorage';
-import type { VaultKey, ConversationKey, EncryptedData } from '../types/crypto';
+import type { VaultKey, ConversationKey, EncryptedData, GroupKey } from '../types/crypto';
 
 interface CryptoContextValue {
   // State
@@ -23,12 +24,13 @@ interface CryptoContextValue {
   // Conversation key operations
   getConversationKey: (myUUID: string, otherUUID: string) => Promise<ConversationKey>;
   getConversationId: (myUUID: string, otherUUID: string) => Promise<string>;
+  getGroupKey: (groupId: string, epoch: number) => Promise<GroupKey>;
 
   // Encryption operations
-  encryptMessage: (conversationKey: ConversationKey, message: string) => Promise<EncryptedData>;
-  decryptMessage: (conversationKey: ConversationKey, encrypted: EncryptedData) => Promise<string>;
-  encryptForConversation: <T>(conversationKey: ConversationKey, data: T) => Promise<EncryptedData>;
-  decryptForConversation: <T>(conversationKey: ConversationKey, encrypted: EncryptedData) => Promise<T>;
+  encryptMessage: (conversationKey: ConversationKey | GroupKey, message: string) => Promise<EncryptedData>;
+  decryptMessage: (conversationKey: ConversationKey | GroupKey, encrypted: EncryptedData) => Promise<string>;
+  encryptForConversation: <T>(conversationKey: ConversationKey | GroupKey, data: T) => Promise<EncryptedData>;
+  decryptForConversation: <T>(conversationKey: ConversationKey | GroupKey, encrypted: EncryptedData) => Promise<T>;
 
   // Identity operations
   encryptIdentity: <T>(data: T) => Promise<EncryptedData>;
@@ -48,6 +50,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   // Conversation key cache
   const [conversationKeyCache] = useState(new Map<string, ConversationKey>());
+  const [groupKeyCache] = useState(new Map<string, GroupKey>());
 
   const isUnlocked = vaultKey !== null;
 
@@ -94,7 +97,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     setIdentityKey(null);
     setContactsKey(null);
     conversationKeyCache.clear();
-  }, [vaultKey, conversationKeyCache]);
+    groupKeyCache.clear();
+  }, [vaultKey, conversationKeyCache, groupKeyCache]);
 
   // Get or derive conversation key
   const getConversationKey = useCallback(async (myUUID: string, otherUUID: string): Promise<ConversationKey> => {
@@ -119,9 +123,24 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     return computeConversationId(myUUID, otherUUID);
   }, []);
 
+  const getGroupKey = useCallback(async (groupId: string, epoch: number): Promise<GroupKey> => {
+    if (!vaultKey) {
+      throw new Error('Vault not unlocked');
+    }
+
+    const cacheKey = `${groupId}:${epoch}`;
+    if (groupKeyCache.has(cacheKey)) {
+      return groupKeyCache.get(cacheKey)!;
+    }
+
+    const groupKey = await deriveGroupKey(vaultKey, groupId, epoch);
+    groupKeyCache.set(cacheKey, groupKey);
+    return groupKey;
+  }, [vaultKey, groupKeyCache]);
+
   // Encrypt message (string)
   const encryptMessage = useCallback(async (
-    conversationKey: ConversationKey,
+    conversationKey: ConversationKey | GroupKey,
     message: string
   ): Promise<EncryptedData> => {
     return encrypt(conversationKey.key, message);
@@ -129,7 +148,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   // Decrypt message (string)
   const decryptMessage = useCallback(async (
-    conversationKey: ConversationKey,
+    conversationKey: ConversationKey | GroupKey,
     encrypted: EncryptedData
   ): Promise<string> => {
     return decrypt(conversationKey.key, encrypted);
@@ -137,7 +156,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   // Encrypt JSON for conversation
   const encryptForConversation = useCallback(async <T,>(
-    conversationKey: ConversationKey,
+    conversationKey: ConversationKey | GroupKey,
     data: T
   ): Promise<EncryptedData> => {
     return encryptJSON(conversationKey.key, data);
@@ -145,7 +164,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   // Decrypt JSON for conversation
   const decryptForConversation = useCallback(async <T,>(
-    conversationKey: ConversationKey,
+    conversationKey: ConversationKey | GroupKey,
     encrypted: EncryptedData
   ): Promise<T> => {
     return decryptJSON<T>(conversationKey.key, encrypted);
@@ -212,6 +231,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     lockVault,
     getConversationKey,
     getConversationId,
+    getGroupKey,
     encryptMessage,
     decryptMessage,
     encryptForConversation,

@@ -84,14 +84,15 @@ async def create_message(
 
     row = await conn.fetchrow(
         """
-        INSERT INTO messages (conversation_id, sender_id, ciphertext, iv)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, conversation_id, sender_id, ciphertext, iv, created_at
+        INSERT INTO messages (conversation_id, sender_id, ciphertext, iv, group_epoch)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, conversation_id, sender_id, group_epoch, ciphertext, iv, created_at
         """,
         message.conversation_id,
         user.user_id,
         ciphertext_bytes,
         iv_bytes,
+        message.group_epoch,
     )
 
     broadcast_msg = {
@@ -99,6 +100,7 @@ async def create_message(
         "id": str(row["id"]),
         "conversation_id": str(row["conversation_id"]),
         "sender_id": str(row["sender_id"]),
+        "group_epoch": row["group_epoch"],
         "ciphertext": base64.b64encode(row["ciphertext"]).decode("ascii"),
         "iv": base64.b64encode(row["iv"]).decode("ascii"),
         "created_at": row["created_at"].isoformat(),
@@ -118,6 +120,7 @@ async def create_message(
         id=row["id"],
         conversation_id=row["conversation_id"],
         sender_id=row["sender_id"],
+        group_epoch=row["group_epoch"],
         ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
         iv=base64.b64encode(row["iv"]).decode("ascii"),
         created_at=row["created_at"],
@@ -137,7 +140,7 @@ async def get_messages(
     if after:
         rows = await conn.fetch(
             """
-            SELECT id, conversation_id, sender_id, ciphertext, iv, created_at
+            SELECT id, conversation_id, sender_id, group_epoch, ciphertext, iv, created_at
             FROM messages
             WHERE conversation_id = $1 AND created_at > $2
             ORDER BY created_at ASC
@@ -150,7 +153,7 @@ async def get_messages(
     else:
         rows = await conn.fetch(
             """
-            SELECT id, conversation_id, sender_id, ciphertext, iv, created_at
+            SELECT id, conversation_id, sender_id, group_epoch, ciphertext, iv, created_at
             FROM messages
             WHERE conversation_id = $1
             ORDER BY created_at DESC
@@ -166,6 +169,7 @@ async def get_messages(
             id=row["id"],
             conversation_id=row["conversation_id"],
             sender_id=row["sender_id"],
+            group_epoch=row["group_epoch"],
             ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
             iv=base64.b64encode(row["iv"]).decode("ascii"),
             created_at=row["created_at"],

@@ -11,8 +11,10 @@ import type { EncryptedData, ConversationMetadata } from '../types/crypto';
 
 export interface Conversation {
   conversationId: string;
-  participantId: string;       // The other participant's user ID
-  participantUsername: string; // The other participant's username
+  kind: 'direct' | 'group';
+  participantId: string;       // The other participant's user ID (direct only)
+  participantUsername: string; // The other participant's username OR group name
+  keyEpoch?: number;
   createdAt: number;
   lastMessageAt: number;
   unreadCount: number;
@@ -110,21 +112,29 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         try {
           const metadata = await decryptFn(encrypted);
           const participants: string[] = Array.isArray(metadata?.participants) ? metadata.participants : [];
-          const participantId = participants.find((participant) => participant !== myUserId) || '';
+          const kind: 'direct' | 'group' = metadata?.kind === 'group' ? 'group' : 'direct';
+          const participantId = kind === 'group'
+            ? ''
+            : (participants.find((participant) => participant !== myUserId) || '');
 
-          if (!participantId) {
+          if (kind === 'direct' && !participantId) {
             continue;
           }
 
-          const participantUsername =
-            contactById.get(participantId)
-            || (metadata?.created_by?.user_id === participantId ? metadata?.created_by?.display_name : '')
-            || participantId;
+          const participantUsername = kind === 'group'
+            ? (metadata?.group_name || `Group ${conversationId.slice(0, 8)}`)
+            : (
+              contactById.get(participantId)
+              || (metadata?.created_by?.user_id === participantId ? metadata?.created_by?.display_name : '')
+              || participantId
+            );
 
           conversations.push({
             conversationId,
+            kind,
             participantId,
             participantUsername,
+            keyEpoch: metadata?.key_epoch,
             createdAt: metadata?.created_at || lastMessageAt,
             lastMessageAt,
             unreadCount: 0
@@ -170,6 +180,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
     const conversation: Conversation = {
       conversationId,
+      kind: 'direct',
       participantId: otherUserId,
       participantUsername: otherUsername,
       createdAt: metadata.created_at,
@@ -260,23 +271,29 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         const conversationId = item.conversation_id;
         const existingConversation = existingByConversationId.get(conversationId);
         const participantId = item.other_user_id || existingConversation?.participantId || '';
+        const kind: 'direct' | 'group' = item.kind === 'group' ? 'group' : 'direct';
 
-        if (!conversationId || !participantId) {
+        if (!conversationId || (kind === 'direct' && !participantId)) {
           continue;
         }
 
         const stored = await loadConversation(conversationId);
         const lastMessageAt = stored?.lastMessageAt || serverCreatedAtById.get(conversationId) || Date.now();
-        const participantUsername =
-          contactById.get(participantId)
-          || item.other_username
-          || existingConversation?.participantUsername
-          || participantId;
+        const participantUsername = kind === 'group'
+          ? (item.group_name || existingConversation?.participantUsername || `Group ${conversationId.slice(0, 8)}`)
+          : (
+            contactById.get(participantId)
+            || item.other_username
+            || existingConversation?.participantUsername
+            || participantId
+          );
 
         newConversations.push({
           conversationId,
+          kind,
           participantId,
           participantUsername,
+          keyEpoch: existingConversation?.keyEpoch,
           createdAt: serverCreatedAtById.get(conversationId) || Date.now(),
           lastMessageAt,
           unreadCount: 0
@@ -329,6 +346,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
             const newConversation: Conversation = {
               conversationId,
+              kind: 'direct',
               participantId: otherParticipant,
               participantUsername,
               createdAt: metadata.created_at,

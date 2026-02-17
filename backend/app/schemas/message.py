@@ -14,6 +14,7 @@ class MessageCreate(BaseModel):
     """Create a new message (encrypted content)"""
     conversation_id: UUID
     recipient_id: Optional[UUID] = None
+    group_epoch: Optional[int] = Field(default=None, ge=1, le=1000000)
     ciphertext: str = Field(..., min_length=4, max_length=MAX_MESSAGE_CIPHERTEXT_B64_CHARS)
     iv: str = Field(..., min_length=16, max_length=MAX_IV_B64_CHARS)
 
@@ -23,6 +24,7 @@ class MessageResponse(BaseModel):
     id: UUID
     conversation_id: UUID
     sender_id: UUID
+    group_epoch: Optional[int] = None
     ciphertext: str
     iv: str
     created_at: datetime

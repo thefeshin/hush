@@ -14,10 +14,12 @@ import type { MessagePayload } from '../types/crypto';
 
 interface Props {
   conversationId: string;
-  participantId: string;
+  participantId?: string;
+  conversationKind?: 'direct' | 'group';
+  groupEpoch?: number;
 }
 
-export function MessageComposer({ conversationId, participantId }: Props) {
+export function MessageComposer({ conversationId, participantId, conversationKind = 'direct', groupEpoch }: Props) {
   const [content, setContent] = useState('');
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -25,7 +27,7 @@ export function MessageComposer({ conversationId, participantId }: Props) {
   const user = useAuthStore(state => state.user);
   const { addPendingMessage, markMessageSent, markMessageFailed } = useMessageStore();
   const { updateLastMessage } = useConversationStore();
-  const { getConversationKey, encryptMessage } = useCrypto();
+  const { getConversationKey, getGroupKey, encryptMessage } = useCrypto();
   const { sendMessage, isConnected } = useWebSocket();
 
   // Focus input on mount and when conversation changes.
@@ -56,18 +58,28 @@ export function MessageComposer({ conversationId, participantId }: Props) {
         sender_id: user.id,
         sender_name: user.username,
         content: trimmedContent,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        conversation_kind: conversationKind,
+        group_id: conversationKind === 'group' ? conversationId : undefined,
+        group_epoch: conversationKind === 'group' ? groupEpoch : undefined,
       };
 
       const payloadString = JSON.stringify(payload);
 
       // Get conversation key and encrypt
-      const conversationKey = await getConversationKey(user.id, participantId);
+      const conversationKey = conversationKind === 'group'
+        ? await getGroupKey(conversationId, groupEpoch || 1)
+        : await getConversationKey(user.id, participantId || '');
       const encrypted = await encryptMessage(conversationKey, payloadString);
 
       if (isConnected) {
         try {
-          const result = await sendMessage(conversationId, encrypted, participantId);
+          const result = await sendMessage(
+            conversationId,
+            encrypted,
+            conversationKind === 'direct' ? participantId : undefined,
+            conversationKind === 'group' ? groupEpoch : undefined,
+          );
 
           // Save to local storage
           await saveMessage(result.id, conversationId, encrypted, payload.timestamp);
@@ -76,13 +88,25 @@ export function MessageComposer({ conversationId, participantId }: Props) {
           markMessageSent(tempId, result.id);
         } catch {
           // Silent fallback: queue for retry and keep optimistic UX.
-          await queueMessage(conversationId, tempId, encrypted, participantId);
+          await queueMessage(
+            conversationId,
+            tempId,
+            encrypted,
+            conversationKind === 'direct' ? participantId : undefined,
+            conversationKind === 'group' ? groupEpoch : undefined,
+          );
           await saveMessage(tempId, conversationId, encrypted, payload.timestamp);
           markMessageSent(tempId, tempId);
         }
       } else {
         // Queue for later when offline
-        await queueMessage(conversationId, tempId, encrypted, participantId);
+        await queueMessage(
+          conversationId,
+          tempId,
+          encrypted,
+          conversationKind === 'direct' ? participantId : undefined,
+          conversationKind === 'group' ? groupEpoch : undefined,
+        );
 
         // Save to local storage with the same temporary ID for deterministic replay reconciliation
         await saveMessage(tempId, conversationId, encrypted, payload.timestamp);

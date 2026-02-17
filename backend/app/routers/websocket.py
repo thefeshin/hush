@@ -202,6 +202,7 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
     conversation_id = data.get("conversation_id")
     recipient_id = data.get("recipient_id")
     client_message_id = data.get("client_message_id")
+    group_epoch = data.get("group_epoch")
     ciphertext = data.get("ciphertext")
     iv = data.get("iv")
 
@@ -226,6 +227,16 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
     conversation_id = str(conversation_id)
     ciphertext = str(ciphertext)
     iv = str(iv)
+    normalized_group_epoch = None
+    if group_epoch is not None:
+        try:
+            normalized_group_epoch = int(group_epoch)
+        except (TypeError, ValueError):
+            await ws_manager.send_personal(websocket, build_error("invalid_group_epoch", "Invalid group_epoch"))
+            return
+        if normalized_group_epoch < 1:
+            await ws_manager.send_personal(websocket, build_error("invalid_group_epoch", "Invalid group_epoch"))
+            return
 
     allowed = await ws_manager.allow_incoming_message(
         websocket,
@@ -292,11 +303,29 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
                             recipient_uuid,
                         )
 
+            conversation_kind = await conn.fetchval(
+                "SELECT kind FROM conversations WHERE id = $1",
+                conversation_uuid,
+            )
+            if conversation_kind == "group":
+                current_epoch = await conn.fetchval(
+                    "SELECT key_epoch FROM groups WHERE id = $1",
+                    conversation_uuid,
+                )
+                if current_epoch is None:
+                    await ws_manager.send_personal(websocket, build_error("group_not_found", "Group not found"))
+                    return
+                if normalized_group_epoch is None:
+                    normalized_group_epoch = int(current_epoch)
+                elif int(current_epoch) != int(normalized_group_epoch):
+                    await ws_manager.send_personal(websocket, build_error("stale_group_epoch", "stale_group_epoch"))
+                    return
+
             row = await conn.fetchrow("""
-                INSERT INTO messages (conversation_id, sender_id, ciphertext, iv)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id, created_at
-            """, conversation_uuid, websocket.state.user_id, ciphertext_bytes, iv_bytes)
+                INSERT INTO messages (conversation_id, sender_id, ciphertext, iv, group_epoch)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id, created_at, group_epoch
+            """, conversation_uuid, websocket.state.user_id, ciphertext_bytes, iv_bytes, normalized_group_epoch)
 
     except HTTPException as exc:
         detail = str(exc.detail)
@@ -308,6 +337,12 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         await ws_manager.send_personal(websocket, build_error("message_persist_failed", "Failed to save message"))
         return
 
+    # Ensure recipient sockets are subscribed before broadcast so first-message
+    # delivery happens via the same single broadcast path as normal messages.
+    if recipient_uuid:
+        recipient_user_id = str(recipient_uuid)
+        await ws_manager.subscribe_user_connections_to_conversation(recipient_user_id, conversation_id)
+
     # Prepare broadcast message (include sender_id for auto-discovery)
     broadcast_msg = {
         "type": "message",
@@ -315,6 +350,7 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         "conversation_id": conversation_id,
         "sender_id": str(websocket.state.user_id),  # Sender's user ID (plaintext)
         "client_message_id": str(client_message_id) if client_message_id else None,
+        "group_epoch": row["group_epoch"],
         "ciphertext": ciphertext,
         "iv": iv,
         "created_at": row["created_at"].isoformat()
@@ -334,12 +370,8 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
             "created_at": row["created_at"].isoformat(),
         })
 
-    # Ensure the recipient gets first-message delivery even before explicit
-    # conversation subscription from the client.
-    if recipient_uuid:
-        recipient_user_id = str(recipient_uuid)
-        await ws_manager.subscribe_user_connections_to_conversation(recipient_user_id, conversation_id)
-        await ws_manager.send_to_user(recipient_user_id, broadcast_msg)
+    # Recipient first-message delivery is handled by the broadcast above after
+    # recipient socket auto-subscription, avoiding duplicate deliveries.
 
 
 async def handle_subscribe_user(websocket: WebSocket, pool):

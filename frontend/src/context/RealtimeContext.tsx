@@ -6,6 +6,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { wsService, ConnectionState } from '../services/websocket';
 import { getSyncService } from '../services/sync';
+import { getGroupState } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useConversationStore } from '../stores/conversationStore';
@@ -14,10 +15,20 @@ import { replaceMessageId, saveConversation, saveMessage } from '../services/sto
 import { processQueue } from '../services/messageQueue';
 import type { ConversationMetadata, EncryptedData, MessagePayload } from '../types/crypto';
 
+function msgEpoch(current?: number, incoming?: number): number {
+  if (typeof incoming === 'number' && incoming > 0) {
+    return incoming;
+  }
+  if (typeof current === 'number' && current > 0) {
+    return current;
+  }
+  return 1;
+}
+
 interface RealtimeContextValue {
   connectionState: ConnectionState;
   isConnected: boolean;
-  sendMessage: (conversationId: string, encrypted: EncryptedData, recipientId?: string) => Promise<{ id: string }>;
+  sendMessage: (conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => Promise<{ id: string }>;
   subscribeConversation: (conversationId: string) => void;
   unsubscribeConversation: (conversationId: string) => void;
   disconnect: () => void;
@@ -32,7 +43,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
   const { addMessage, markMessageSent } = useMessageStore();
   const { updateLastMessage, incrementUnread, getConversation, upsertConversation } = useConversationStore();
-  const { isUnlocked, getConversationKey, decryptMessage, encryptIdentity } = useCrypto();
+  const { isUnlocked, getConversationKey, getGroupKey, decryptMessage, encryptIdentity } = useCrypto();
 
   // Connection lifecycle is owned here.
   useEffect(() => {
@@ -66,7 +77,8 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     conversationId: string,
     encrypted: EncryptedData,
     senderId: string | undefined,
-    createdAt?: string
+    createdAt?: string,
+    groupEpoch?: number,
   ) => {
     if (!user || !senderId) {
       return;
@@ -76,14 +88,24 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       const existingConversation = getConversation(conversationId);
 
       if (!existingConversation) {
-        const conversationKey = await getConversationKey(user.id, senderId);
+        let conversationKey;
+        let groupState: Awaited<ReturnType<typeof getGroupState>> | null = null;
+        if (groupEpoch) {
+          groupState = await getGroupState(conversationId);
+          conversationKey = await getGroupKey(conversationId, groupState.key_epoch || groupEpoch);
+        } else {
+          conversationKey = await getConversationKey(user.id, senderId);
+        }
         const plaintext = await decryptMessage(conversationKey, encrypted);
         const payload: MessagePayload = JSON.parse(plaintext);
         const timestamp = createdAt ? new Date(createdAt).getTime() : payload.timestamp;
         const participantUsername = payload.sender_name || senderId;
 
         const metadata: ConversationMetadata = {
-          participants: [user.id, senderId].sort() as [string, string],
+          participants: groupState ? groupState.members.map((member) => member.user_id) : [user.id, senderId].sort(),
+          kind: groupState ? 'group' : 'direct',
+          group_name: groupState?.name,
+          key_epoch: groupState?.key_epoch,
           created_by: {
             user_id: payload.sender_id,
             display_name: payload.sender_name
@@ -95,8 +117,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
         upsertConversation({
           conversationId,
-          participantId: senderId,
-          participantUsername,
+          kind: groupState ? 'group' : 'direct',
+          participantId: groupState ? '' : senderId,
+          participantUsername: groupState?.name || participantUsername,
+          keyEpoch: groupState?.key_epoch,
           createdAt: Date.now(),
           lastMessageAt: timestamp,
           unreadCount: 1
@@ -120,7 +144,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const conversationKey = await getConversationKey(user.id, existingConversation.participantId);
+      const conversationKey = existingConversation.kind === 'group'
+        ? await getGroupKey(conversationId, msgEpoch(existingConversation.keyEpoch, groupEpoch))
+        : await getConversationKey(user.id, existingConversation.participantId);
       const plaintext = await decryptMessage(conversationKey, encrypted);
       const payload: MessagePayload = JSON.parse(plaintext);
 
@@ -130,7 +156,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (payload.sender_id !== user.id && payload.sender_name) {
         upsertConversation({
           ...existingConversation,
-          participantUsername: payload.sender_name,
+          participantUsername: existingConversation.kind === 'group' ? existingConversation.participantUsername : payload.sender_name,
+          keyEpoch: existingConversation.kind === 'group'
+            ? (payload.group_epoch || groupEpoch || existingConversation.keyEpoch || 1)
+            : existingConversation.keyEpoch,
           lastMessageAt: timestamp
         });
       }
@@ -156,6 +185,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     user,
     getConversation,
     getConversationKey,
+    getGroupKey,
     decryptMessage,
     encryptIdentity,
     upsertConversation,
@@ -171,12 +201,12 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
 
       await processQueue(
-        async (conversationId, encrypted, recipientId) => {
+        async (conversationId, encrypted, recipientId, groupEpoch) => {
           try {
-            return await wsService.sendMessage(conversationId, encrypted, recipientId);
+            return await wsService.sendMessage(conversationId, encrypted, recipientId, groupEpoch);
           } catch {
             const syncService = getSyncService();
-            return await syncService.sendMessage(conversationId, encrypted, recipientId);
+            return await syncService.sendMessage(conversationId, encrypted, recipientId, groupEpoch);
           }
         },
         async (localMessageId, serverMessageId) => {
@@ -215,8 +245,36 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           msg.conversation_id,
           { ciphertext: msg.ciphertext, iv: msg.iv },
           msg.sender_id,
-          msg.created_at
+          msg.created_at,
+          msg.group_epoch
         );
+      }
+
+      if ((msg.type === 'group_member_added' || msg.type === 'group_member_removed' || msg.type === 'group_key_rotated')
+        && msg.conversation_id) {
+        const existing = getConversation(msg.conversation_id);
+        if (existing && existing.kind === 'group') {
+          upsertConversation({
+            ...existing,
+            keyEpoch: msg.group_epoch || existing.keyEpoch || 1,
+          });
+        }
+      }
+
+      if (msg.type === 'group_created' && msg.conversation_id) {
+        const existing = getConversation(msg.conversation_id);
+        if (!existing) {
+          upsertConversation({
+            conversationId: msg.conversation_id,
+            kind: 'group',
+            participantId: '',
+            participantUsername: msg.group_name || `Group ${msg.conversation_id.slice(0, 8)}`,
+            keyEpoch: msg.group_epoch || 1,
+            createdAt: Date.now(),
+            lastMessageAt: Date.now(),
+            unreadCount: 0,
+          });
+        }
       }
 
       setConnectionState(wsService.getState());
@@ -226,10 +284,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       unsubConnection();
       unsubMessage();
     };
-  }, [handleIncomingMessage]);
+  }, [handleIncomingMessage, getConversation, upsertConversation]);
 
-  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string) => {
-    return wsService.sendMessage(conversationId, encrypted, recipientId);
+  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => {
+    return wsService.sendMessage(conversationId, encrypted, recipientId, groupEpoch);
   }, []);
 
   const subscribeConversation = useCallback((conversationId: string) => {

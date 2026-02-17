@@ -10,6 +10,7 @@ interface MessageFromServer {
   id: string;
   conversation_id: string;
   sender_id: string;
+  group_epoch?: number;
   ciphertext: string;
   iv: string;
   created_at: string;
@@ -106,6 +107,7 @@ export class SyncService {
     conversationId: string,
     encrypted: EncryptedData,
     recipientId?: string,
+    groupEpoch?: number,
   ): Promise<{ id: string; created_at: string }> {
     const response = await this.authFetch("/messages", {
       method: "POST",
@@ -113,6 +115,7 @@ export class SyncService {
       body: JSON.stringify({
         conversation_id: conversationId,
         recipient_id: recipientId,
+        group_epoch: groupEpoch,
         ciphertext: encrypted.ciphertext,
         iv: encrypted.iv,
       }),
