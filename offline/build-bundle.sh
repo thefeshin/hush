@@ -264,22 +264,39 @@ collect_dependency_closure() {
   local ubuntu_tag="$2"
   local target_dir="$3"
   local deps_tmp_dir="$TMP_DIR/${codename}-deps"
+  local closure_log="$target_dir/manifests/dependency-closure.log"
+  local closure_script="$TMP_DIR/${codename}-dependency-closure.sh"
 
   mkdir -p "$deps_tmp_dir"
   docker pull "ubuntu:${ubuntu_tag}" >/dev/null
 
-  docker run --rm --platform "linux/${TARGET_ARCH}" \
-    -e TARGET_CODENAME="$codename" \
-    -v "$target_dir/pkgs/python:/out/python" \
-    -v "$deps_tmp_dir:/out/docker-deps" \
-    -v "$target_dir/manifests:/out/manifests" \
-    "ubuntu:${ubuntu_tag}" bash -s <<'EOF'
-set -euo pipefail
+  : > "$closure_log"
+  echo "[closure] target=$codename ubuntu_tag=$ubuntu_tag arch=$TARGET_ARCH" | tee -a "$closure_log"
+
+  cat > "$closure_script" <<'EOF'
+#!/bin/bash
+set -euxo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 APT_OPTS=("-y" "--no-install-recommends")
 DOCKER_PKGS=(containerd.io docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin)
 PYTHON_PKGS=(python3 python3-pip python3-venv)
+
+echo "[closure] uname: $(uname -a)"
+echo "[closure] target codename: ${TARGET_CODENAME}"
+
+mkdir -p /tmp/apt-cache
+
+print_cache_state() {
+  local label="$1"
+  echo "[closure] cache state (${label})"
+  ls -lah /tmp/apt-cache || true
+  if compgen -G "/tmp/apt-cache/*.deb" >/dev/null; then
+    ls -1 /tmp/apt-cache/*.deb | sed 's|.*/||' | sort -u
+  else
+    echo "[closure] no deb files in /tmp/apt-cache"
+  fi
+}
 
 apt-get update
 apt-get install "${APT_OPTS[@]}" ca-certificates curl gnupg
@@ -296,10 +313,15 @@ echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.d
 
 apt-get update
 
+echo "[closure] apt keep-downloaded settings"
+apt-config dump | grep -E 'Keep-Downloaded|Post-Invoke|docker-clean' || true
+
 {
   echo "# Candidate versions for ${TARGET_CODENAME} at bundle build time"
   for pkg in "${DOCKER_PKGS[@]}" "${PYTHON_PKGS[@]}"; do
-    candidate="$(apt-cache policy "$pkg" | awk '/Candidate:/ {print $2; exit}')"
+    echo "[closure] resolving candidate for ${pkg}" >&2
+    policy_output="$(apt-cache policy "$pkg" || true)"
+    candidate="$(printf '%s\n' "$policy_output" | awk '/Candidate:/ {print $2} END {if (NR == 0) print ""}')"
     if [[ -z "${candidate:-}" || "$candidate" == "(none)" ]]; then
       echo "$pkg=<missing>"
     else
@@ -308,24 +330,61 @@ apt-get update
   done
 } > /out/manifests/apt-candidates.txt
 
-rm -f /var/cache/apt/archives/*.deb
-apt-get install "${APT_OPTS[@]}" --reinstall --download-only "${PYTHON_PKGS[@]}"
-if compgen -G "/var/cache/apt/archives/*.deb" >/dev/null; then
-  cp /var/cache/apt/archives/*.deb /out/python/
+echo "[closure] wrote /out/manifests/apt-candidates.txt"
+
+rm -f /tmp/apt-cache/*.deb
+apt-get install "${APT_OPTS[@]}" --reinstall --download-only \
+  -o APT::Keep-Downloaded-Packages=true \
+  -o Dir::Cache::archives=/tmp/apt-cache \
+  "${PYTHON_PKGS[@]}"
+print_cache_state "after python download"
+if compgen -G "/tmp/apt-cache/*.deb" >/dev/null; then
+  cp /tmp/apt-cache/*.deb /out/python/
+  echo "[closure] python debs copied to /out/python"
+  ls -lah /out/python || true
 else
   echo "No Python .deb packages were downloaded" >&2
+  apt-cache policy "${PYTHON_PKGS[@]}" || true
   exit 1
 fi
 
-rm -f /var/cache/apt/archives/*.deb
-apt-get install "${APT_OPTS[@]}" --reinstall --download-only "${DOCKER_PKGS[@]}"
-if compgen -G "/var/cache/apt/archives/*.deb" >/dev/null; then
-  cp /var/cache/apt/archives/*.deb /out/docker-deps/
+rm -f /tmp/apt-cache/*.deb
+apt-get install "${APT_OPTS[@]}" --reinstall --download-only \
+  -o APT::Keep-Downloaded-Packages=true \
+  -o Dir::Cache::archives=/tmp/apt-cache \
+  "${DOCKER_PKGS[@]}"
+print_cache_state "after docker deps download"
+if compgen -G "/tmp/apt-cache/*.deb" >/dev/null; then
+  cp /tmp/apt-cache/*.deb /out/docker-deps/
+  echo "[closure] docker dep debs copied to /out/docker-deps"
+  ls -lah /out/docker-deps || true
 else
   echo "No Docker dependency .deb packages were downloaded" >&2
+  apt-cache policy "${DOCKER_PKGS[@]}" || true
   exit 1
 fi
 EOF
+
+  chmod +x "$closure_script"
+
+  if ! docker run --rm --platform "linux/${TARGET_ARCH}" \
+    -e TARGET_CODENAME="$codename" \
+    -v "$target_dir/pkgs/python:/out/python" \
+    -v "$deps_tmp_dir:/out/docker-deps" \
+    -v "$target_dir/manifests:/out/manifests" \
+    -v "$closure_script:/tmp/dependency-closure.sh:ro" \
+    "ubuntu:${ubuntu_tag}" bash /tmp/dependency-closure.sh >>"$closure_log" 2>&1
+  then
+    echo "[debug] dependency closure container failed; log tail:" >&2
+    tail -n 120 "$closure_log" >&2 || true
+    fail "Dependency closure step failed for $codename (see $closure_log)"
+  fi
+
+  if [[ ! -f "$target_dir/manifests/apt-candidates.txt" ]]; then
+    echo "[debug] apt-candidates.txt missing; closure log tail:" >&2
+    tail -n 120 "$closure_log" >&2 || true
+    fail "Dependency closure did not produce apt-candidates.txt for $codename"
+  fi
 
   local source_dir
   local -a deb_files
@@ -336,7 +395,15 @@ EOF
 
     if [[ ${#deb_files[@]} -eq 0 ]]; then
       if [[ "$source_dir" == "$target_dir/pkgs/python" ]]; then
-        fail "No python .deb packages were collected for $codename"
+        echo "[debug] dependency closure log tail:" >&2
+        tail -n 80 "$closure_log" >&2 || true
+        echo "[debug] manifests dir listing:" >&2
+        ls -lah "$target_dir/manifests" >&2 || true
+        echo "[debug] python dir listing:" >&2
+        ls -lah "$target_dir/pkgs/python" >&2 || true
+        echo "[debug] docker deps temp dir listing:" >&2
+        ls -lah "$deps_tmp_dir" >&2 || true
+        fail "No python .deb packages were collected for $codename (see $closure_log)"
       fi
       continue
     fi
@@ -344,8 +411,8 @@ EOF
     cp "${deb_files[@]}" "$target_dir/pkgs/all/"
   done
 
-  find "$target_dir/pkgs/python" -maxdepth 1 -type f -name "*.deb" -printf "%f\n" | sort -u > "$target_dir/manifests/python-packages.txt"
-  find "$target_dir/pkgs/all" -maxdepth 1 -type f -name "*.deb" -printf "%f\n" | sort -u > "$target_dir/manifests/all-packages.txt"
+  find "$target_dir/pkgs/python" -maxdepth 1 -type f -name "*.deb" -exec basename {} \; | sort -u > "$target_dir/manifests/python-packages.txt"
+  find "$target_dir/pkgs/all" -maxdepth 1 -type f -name "*.deb" -exec basename {} \; | sort -u > "$target_dir/manifests/all-packages.txt"
 }
 
 run_offline_install_smoke() {
@@ -413,7 +480,7 @@ EOF
     cd "$target_dir"
     {
       sha256sum "hush-offline-bundle.tar"
-      find "pkgs" -type f -name "*.deb" -print | sort | xargs -r sha256sum
+      while IFS= read -r file; do sha256sum "$file"; done < <(find "pkgs" -type f -name "*.deb" -print | sort)
       sha256sum "docker-compose.yml"
       if [[ -f "docker-compose.override.yml" ]]; then
         sha256sum "docker-compose.override.yml"
@@ -425,8 +492,8 @@ EOF
       sha256sum "generate_secrets.py"
       sha256sum "bundle-manifest.txt"
       sha256sum "TRANSFER-CHECKLIST.txt"
-      find "manifests" -type f -name "*.txt" -print | sort | xargs -r sha256sum
-      find "nginx" -type f -print | sort | xargs -r sha256sum
+      while IFS= read -r file; do sha256sum "$file"; done < <(find "manifests" -type f -name "*.txt" -print | sort)
+      while IFS= read -r file; do sha256sum "$file"; done < <(find "nginx" -type f -print | sort)
     } > "SHA256SUMS"
   )
 }
