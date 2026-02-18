@@ -166,10 +166,6 @@ export function Settings({ onBack, embedded = false }: SettingsProps) {
     navigate(-1);
   };
 
-  if (state === 'enable-pin') {
-    return <PINSetup onSuccess={handleEnablePIN} onCancel={() => setState('view')} isLoading={isLoading} embedded={embedded} />;
-  }
-
   if (state === 'disable-pin') {
     const wrapperClass = embedded
       ? 'px-4 py-6'
@@ -428,6 +424,17 @@ export function Settings({ onBack, embedded = false }: SettingsProps) {
           </section>
         </div>
       </div>
+
+      {state === 'enable-pin' && (
+        <PINSetup
+          onSuccess={handleEnablePIN}
+          onCancel={() => {
+            setError(null);
+            setState('view');
+          }}
+          isLoading={isLoading}
+        />
+      )}
     </div>
   );
 }
