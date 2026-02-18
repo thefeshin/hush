@@ -122,6 +122,12 @@ async def create_group(
     }
     await ws_manager.broadcast_to_conversation(str(conversation_id), group_event)
 
+    member_ids = [member_id for member_id in payload.member_ids if member_id != user.user_id]
+    for member_id in member_ids:
+        member_user_id = str(member_id)
+        await ws_manager.subscribe_user_connections_to_conversation(member_user_id, str(conversation_id))
+        await ws_manager.send_to_user(member_user_id, group_event)
+
     return GroupResponse(
         id=row["id"],
         conversation_id=row["id"],
@@ -182,6 +188,11 @@ async def add_group_member(
                 payload.encrypted_key_envelope,
             )
 
+    group_name = await conn.fetchval(
+        "SELECT group_name FROM conversations WHERE id = $1",
+        group_id,
+    )
+
     await ws_manager.broadcast_to_conversation(
         str(group_id),
         {
@@ -189,6 +200,17 @@ async def add_group_member(
             "conversation_id": str(group_id),
             "user_id": str(payload.user_id),
             "role": payload.role,
+            "group_name": group_name or "Unnamed Group",
+            "key_epoch": int(new_epoch),
+        },
+    )
+    await ws_manager.subscribe_user_connections_to_conversation(str(payload.user_id), str(group_id))
+    await ws_manager.send_to_user(
+        str(payload.user_id),
+        {
+            "type": "group_created",
+            "conversation_id": str(group_id),
+            "group_name": group_name or "Unnamed Group",
             "key_epoch": int(new_epoch),
         },
     )

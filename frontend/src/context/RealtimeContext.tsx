@@ -14,6 +14,7 @@ import { useCrypto } from '../crypto/CryptoContext';
 import { replaceMessageId, saveConversation, saveMessage } from '../services/storage';
 import { processQueue } from '../services/messageQueue';
 import type { ConversationMetadata, EncryptedData, MessagePayload } from '../types/crypto';
+import { ensureGroupConversationVisible } from './realtimeGroup';
 
 function msgEpoch(current?: number, incoming?: number): number {
   if (typeof incoming === 'number' && incoming > 0) {
@@ -44,6 +45,27 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const { addMessage, markMessageSent } = useMessageStore();
   const { updateLastMessage, incrementUnread, getConversation, upsertConversation } = useConversationStore();
   const { isUnlocked, getConversationKey, getGroupKey, decryptMessage, encryptIdentity } = useCrypto();
+
+  const ensureGroupConversationVisibleForUser = useCallback(async (
+    conversationId: string,
+    fallbackName?: string,
+    fallbackEpoch?: number,
+  ) => {
+    if (!user) {
+      return;
+    }
+
+    await ensureGroupConversationVisible({
+      user,
+      conversationId,
+      fallbackName,
+      fallbackEpoch,
+      getConversation,
+      upsertConversation,
+      getGroupState,
+      encryptIdentity,
+    });
+  }, [user, getConversation, upsertConversation, encryptIdentity]);
 
   // Connection lifecycle is owned here.
   useEffect(() => {
@@ -252,6 +274,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
       if ((msg.type === 'group_member_added' || msg.type === 'group_member_removed' || msg.type === 'group_key_rotated')
         && msg.conversation_id) {
+        if (msg.type === 'group_member_added' && msg.user_id && user && msg.user_id === user.id) {
+          await ensureGroupConversationVisibleForUser(msg.conversation_id, msg.group_name, msg.group_epoch);
+        }
+
         const existing = getConversation(msg.conversation_id);
         if (existing && existing.kind === 'group') {
           upsertConversation({
@@ -262,19 +288,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (msg.type === 'group_created' && msg.conversation_id) {
-        const existing = getConversation(msg.conversation_id);
-        if (!existing) {
-          upsertConversation({
-            conversationId: msg.conversation_id,
-            kind: 'group',
-            participantId: '',
-            participantUsername: msg.group_name || `Group ${msg.conversation_id.slice(0, 8)}`,
-            keyEpoch: msg.group_epoch || 1,
-            createdAt: Date.now(),
-            lastMessageAt: Date.now(),
-            unreadCount: 0,
-          });
-        }
+        await ensureGroupConversationVisibleForUser(msg.conversation_id, msg.group_name, msg.group_epoch);
       }
 
       setConnectionState(wsService.getState());
@@ -284,7 +298,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       unsubConnection();
       unsubMessage();
     };
-  }, [handleIncomingMessage, getConversation, upsertConversation]);
+  }, [handleIncomingMessage, getConversation, upsertConversation, ensureGroupConversationVisibleForUser, user]);
 
   const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => {
     return wsService.sendMessage(conversationId, encrypted, recipientId, groupEpoch);

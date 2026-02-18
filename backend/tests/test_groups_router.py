@@ -22,9 +22,17 @@ class FakeTransaction:
 class FakeWsManager:
     def __init__(self):
         self.broadcasts = []
+        self.user_subscriptions = []
+        self.user_messages = []
 
     async def broadcast_to_conversation(self, conversation_id, message):
         self.broadcasts.append((conversation_id, message))
+
+    async def subscribe_user_connections_to_conversation(self, user_id, conversation_id):
+        self.user_subscriptions.append((user_id, conversation_id))
+
+    async def send_to_user(self, user_id, message):
+        self.user_messages.append((user_id, message))
 
 
 def make_conn():
@@ -85,6 +93,12 @@ async def test_create_group_inserts_conversation_and_members_and_broadcasts(monk
     assert event["type"] == "group_created"
     assert event["conversation_id"] == str(conversation_id)
 
+    assert len(fake_manager.user_subscriptions) == 2
+    assert (str(member_a), str(conversation_id)) in fake_manager.user_subscriptions
+    assert (str(member_b), str(conversation_id)) in fake_manager.user_subscriptions
+    assert len(fake_manager.user_messages) == 2
+    assert all(message["type"] == "group_created" for _, message in fake_manager.user_messages)
+
 
 @pytest.mark.asyncio
 async def test_create_group_does_not_duplicate_creator_member_row(monkeypatch):
@@ -142,7 +156,7 @@ async def test_add_group_member_rotates_epoch_and_broadcasts_events(monkeypatch)
     member_id = uuid4()
 
     conn = make_conn()
-    conn.fetchval = AsyncMock(return_value=5)
+    conn.fetchval = AsyncMock(side_effect=[5, "Ops"])
 
     user = make_user()
     payload = groups_router.GroupMemberAddRequest(
@@ -158,8 +172,14 @@ async def test_add_group_member_rotates_epoch_and_broadcasts_events(monkeypatch)
 
     assert len(fake_manager.broadcasts) == 2
     assert fake_manager.broadcasts[0][1]["type"] == "group_member_added"
+    assert fake_manager.broadcasts[0][1]["group_name"] == "Ops"
     assert fake_manager.broadcasts[1][1]["type"] == "group_key_rotated"
     assert fake_manager.broadcasts[1][1]["key_epoch"] == 5
+    assert fake_manager.user_subscriptions == [(str(member_id), str(group_id))]
+    assert len(fake_manager.user_messages) == 1
+    assert fake_manager.user_messages[0][0] == str(member_id)
+    assert fake_manager.user_messages[0][1]["type"] == "group_created"
+    assert fake_manager.user_messages[0][1]["group_name"] == "Ops"
 
 
 @pytest.mark.asyncio
