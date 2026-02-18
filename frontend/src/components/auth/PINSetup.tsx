@@ -65,7 +65,7 @@ export function PINSetup({ onSuccess, onCancel, isLoading = false, embedded = fa
   };
 
   return (
-    <div className={embedded ? 'px-4 py-6' : 'flex min-h-screen items-center justify-center p-4'}>
+    <div className={embedded ? 'px-4 py-6' : 'flex min-h-dvh items-center justify-center p-4'}>
       <div className="w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
         <div>
           <h1 className="text-center text-display font-black tracking-[0.5rem] text-accent">HUSH</h1>

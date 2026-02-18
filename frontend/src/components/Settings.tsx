@@ -22,7 +22,7 @@ interface SettingsProps {
   embedded?: boolean;
 }
 
-const cardWrapper = 'flex min-h-screen items-center justify-center p-4';
+const cardWrapper = 'flex min-h-dvh items-center justify-center p-4';
 const card = 'w-full max-w-md rounded-2xl bg-bg-secondary p-8 shadow-[0_4px_20px_rgba(0,0,0,0.3)]';
 const title = 'text-center text-display font-black tracking-[0.5rem] text-accent';
 const subtitle = 'mb-8 text-center text-text-secondary';
@@ -340,7 +340,7 @@ export function Settings({ onBack, embedded = false }: SettingsProps) {
   }
 
   return (
-    <div className={embedded ? 'bg-bg-secondary px-0 py-4' : 'flex h-screen overflow-hidden'}>
+    <div className={embedded ? 'bg-bg-secondary px-0 py-4' : 'flex h-dvh overflow-hidden'}>
       <div className={embedded ? 'mx-auto w-full max-w-4xl px-4' : 'flex-1 overflow-y-auto bg-bg-primary'}>
         {!embedded && (
           <div className="flex items-center gap-4 border-b border-border bg-bg-secondary px-6 py-4">

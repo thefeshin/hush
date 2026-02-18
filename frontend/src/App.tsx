@@ -158,14 +158,14 @@ function AppContent() {
     };
 
   return (
-    <div className="min-h-screen bg-bg-primary text-body text-text-primary leading-relaxed">
+    <div className="min-h-dvh bg-bg-primary text-body text-text-primary leading-relaxed">
       <Toaster position="top-right" />
       {/* PWA Banners */}
       <UpdateBanner />
 
       {/* Main Content */}
       {appState === 'loading' && (
-        <div className="flex min-h-screen items-center justify-center">
+        <div className="flex min-h-dvh items-center justify-center">
           <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-border border-t-accent" />
         </div>
       )}
