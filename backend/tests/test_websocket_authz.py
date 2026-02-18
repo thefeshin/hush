@@ -13,11 +13,13 @@ from app.security_limits import MAX_MESSAGE_CIPHERTEXT_BYTES
 
 
 class FakeConnection:
-    def __init__(self, *, fetchval_side_effect=None, rows=None, fetchrow_value=None):
+    def __init__(self, *, fetchval_side_effect=None, rows=None, fetchrow_value=None, fetchrow_side_effect=None):
         self._fetchval_side_effect = list(fetchval_side_effect or [])
         self._rows = rows or []
         self._fetchrow_value = fetchrow_value
+        self._fetchrow_side_effect = list(fetchrow_side_effect or [])
         self.fetch_args = None
+        self.execute_calls = []
 
     async def fetchval(self, _query, *_args):
         if not self._fetchval_side_effect:
@@ -29,7 +31,13 @@ class FakeConnection:
         return self._rows
 
     async def fetchrow(self, _query, *_args):
+        if self._fetchrow_side_effect:
+            return self._fetchrow_side_effect.pop(0)
         return self._fetchrow_value
+
+    async def execute(self, _query, *_args):
+        self.execute_calls.append((_query, _args))
+        return "OK"
 
 
 class FakeAcquire:
@@ -443,3 +451,71 @@ async def test_handle_message_accepts_group_epoch_and_broadcasts(monkeypatch):
     _, broadcast_payload = fake_manager.broadcasts[0]
     assert broadcast_payload["id"] == str(persisted_message_id)
     assert broadcast_payload["group_epoch"] == 4
+
+
+@pytest.mark.asyncio
+async def test_handle_message_seen_marks_seen_and_broadcasts(monkeypatch):
+    fake_manager = FakeWsManager()
+    monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
+
+    conversation_id = uuid4()
+    message_id = uuid4()
+    sender_id = uuid4()
+    recipient_id = uuid4()
+    seen_at = datetime.now(timezone.utc)
+
+    conn = FakeConnection(
+        fetchrow_side_effect=[
+            {"id": message_id, "sender_id": sender_id, "expires_after_seen_sec": 30},
+            {"seen_at": seen_at},
+        ],
+        fetchval_side_effect=[True, True, True],
+    )
+    pool = FakePool(conn)
+    websocket = FakeWebSocket(user_id=recipient_id)
+
+    await ws_router.handle_message_seen(
+        websocket,
+        {
+            "conversation_id": str(conversation_id),
+            "message_id": str(message_id),
+        },
+        pool,
+    )
+
+    assert len(fake_manager.broadcasts) == 1
+    _, payload = fake_manager.broadcasts[0]
+    assert payload["type"] == "message_seen"
+    assert payload["message_id"] == str(message_id)
+    assert payload["seen_by"] == str(recipient_id)
+
+
+@pytest.mark.asyncio
+async def test_handle_message_seen_rejects_sender_self_seen(monkeypatch):
+    fake_manager = FakeWsManager()
+    monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
+
+    conversation_id = uuid4()
+    message_id = uuid4()
+    sender_id = uuid4()
+
+    conn = FakeConnection(
+        fetchrow_side_effect=[
+            {"id": message_id, "sender_id": sender_id, "expires_after_seen_sec": None},
+        ],
+        fetchval_side_effect=[True, True],
+    )
+    pool = FakePool(conn)
+    websocket = FakeWebSocket(user_id=sender_id)
+
+    await ws_router.handle_message_seen(
+        websocket,
+        {
+            "conversation_id": str(conversation_id),
+            "message_id": str(message_id),
+        },
+        pool,
+    )
+
+    assert fake_manager.personal[-1]["type"] == "error"
+    assert fake_manager.personal[-1]["code"] == "invalid_seen_actor"

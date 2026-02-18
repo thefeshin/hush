@@ -14,6 +14,7 @@ from app.middleware.security import SecurityMiddleware
 from app.logging_config import setup_logging
 from app.services.connection_cleanup import start_cleanup_task
 from app.services.heartbeat import start_heartbeat_task
+from app.services.message_expiry import start_message_expiry_task
 
 
 @asynccontextmanager
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     await start_cleanup_task()
     await start_heartbeat_task()
+    await start_message_expiry_task()
 
     yield
 

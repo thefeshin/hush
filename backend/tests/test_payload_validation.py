@@ -80,3 +80,23 @@ def test_message_schema_accepts_valid_group_epoch():
         iv=VALID_IV_B64,
     )
     assert message.group_epoch == 7
+
+
+def test_message_schema_accepts_valid_expires_after_seen():
+    message = MessageCreate(
+        conversation_id=uuid4(),
+        expires_after_seen_sec=30,
+        ciphertext=base64.b64encode(b"hello").decode("ascii"),
+        iv=VALID_IV_B64,
+    )
+    assert message.expires_after_seen_sec == 30
+
+
+def test_message_schema_rejects_invalid_expires_after_seen():
+    with pytest.raises(ValidationError):
+        MessageCreate(
+            conversation_id=uuid4(),
+            expires_after_seen_sec=20,
+            ciphertext=base64.b64encode(b"hello").decode("ascii"),
+            iv=VALID_IV_B64,
+        )

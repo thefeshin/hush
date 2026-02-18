@@ -145,6 +145,21 @@ async def _init_schema(conn: asyncpg.Connection):
     """)
 
     await conn.execute("""
+        ALTER TABLE messages
+        ADD COLUMN IF NOT EXISTS expires_after_seen_sec SMALLINT
+    """)
+
+    await conn.execute("""
+        ALTER TABLE messages
+        ADD COLUMN IF NOT EXISTS sender_delete_after_seen_at TIMESTAMP WITH TIME ZONE
+    """)
+
+    await conn.execute("""
+        ALTER TABLE messages
+        ADD COLUMN IF NOT EXISTS sender_deleted_at TIMESTAMP WITH TIME ZONE
+    """)
+
+    await conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
             ON messages(conversation_id)
     """)
@@ -152,6 +167,35 @@ async def _init_schema(conn: asyncpg.Connection):
     await conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_messages_created_at
             ON messages(conversation_id, created_at)
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_messages_sender_delete_due
+            ON messages(sender_delete_after_seen_at)
+            WHERE sender_delete_after_seen_at IS NOT NULL AND sender_deleted_at IS NULL
+    """)
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS message_user_state (
+            message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            is_sender BOOLEAN NOT NULL DEFAULT FALSE,
+            seen_at TIMESTAMP WITH TIME ZONE,
+            delete_after_seen_at TIMESTAMP WITH TIME ZONE,
+            deleted_at TIMESTAMP WITH TIME ZONE,
+            PRIMARY KEY (message_id, user_id)
+        )
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_message_user_state_due
+            ON message_user_state(delete_after_seen_at)
+            WHERE delete_after_seen_at IS NOT NULL AND deleted_at IS NULL AND is_sender = FALSE
+    """)
+
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_message_user_state_seen_by_user
+            ON message_user_state(user_id, seen_at DESC)
     """)
 
     await conn.execute("""

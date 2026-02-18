@@ -124,7 +124,10 @@ class StatefulConn:
             }
 
         if "insert into messages" in normalized and "returning id, created_at, group_epoch" in normalized:
-            conversation_id, sender_id, ciphertext, iv, group_epoch = args
+            if len(args) == 6:
+                conversation_id, sender_id, ciphertext, iv, group_epoch, _expires_after_seen_sec = args
+            else:
+                conversation_id, sender_id, ciphertext, iv, group_epoch = args
             message_id = uuid4()
             created_at = datetime.now(timezone.utc)
             self.messages[message_id] = {
@@ -141,6 +144,15 @@ class StatefulConn:
                 "created_at": created_at,
                 "group_epoch": group_epoch,
             }
+
+        return None
+
+    async def executemany(self, query, args_list):
+        normalized = " ".join(query.lower().split())
+
+        if "insert into message_user_state" in normalized:
+            # No-op state capture for integration flow.
+            return None
 
         return None
 

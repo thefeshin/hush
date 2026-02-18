@@ -103,6 +103,9 @@ async def websocket_endpoint(websocket: WebSocket):
             elif msg_type == "message":
                 await handle_message(websocket, data, pool)
 
+            elif msg_type == "message_seen":
+                await handle_message_seen(websocket, data, pool)
+
             elif msg_type == "ping":
                 await ws_manager.send_personal(websocket, {"type": "pong"})
 
@@ -204,6 +207,7 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
     recipient_id = data.get("recipient_id")
     client_message_id = data.get("client_message_id")
     group_epoch = data.get("group_epoch")
+    expires_after_seen_sec = data.get("expires_after_seen_sec")
     ciphertext = data.get("ciphertext")
     iv = data.get("iv")
 
@@ -237,6 +241,17 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
             return
         if normalized_group_epoch < 1:
             await ws_manager.send_personal(websocket, build_error("invalid_group_epoch", "Invalid group_epoch"))
+            return
+
+    normalized_expires_after_seen_sec = None
+    if expires_after_seen_sec is not None:
+        try:
+            normalized_expires_after_seen_sec = int(expires_after_seen_sec)
+        except (TypeError, ValueError):
+            await ws_manager.send_personal(websocket, build_error("invalid_expires_after_seen", "Invalid expires_after_seen_sec"))
+            return
+        if normalized_expires_after_seen_sec not in {15, 30, 60}:
+            await ws_manager.send_personal(websocket, build_error("invalid_expires_after_seen", "Invalid expires_after_seen_sec"))
             return
 
     allowed = await ws_manager.allow_incoming_message(
@@ -333,10 +348,31 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
                     return
 
             row = await conn.fetchrow("""
-                INSERT INTO messages (conversation_id, sender_id, ciphertext, iv, group_epoch)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, created_at, group_epoch
-            """, conversation_uuid, websocket.state.user_id, ciphertext_bytes, iv_bytes, normalized_group_epoch)
+                INSERT INTO messages (conversation_id, sender_id, ciphertext, iv, group_epoch, expires_after_seen_sec)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id, created_at, group_epoch, expires_after_seen_sec
+            """, conversation_uuid, websocket.state.user_id, ciphertext_bytes, iv_bytes, normalized_group_epoch, normalized_expires_after_seen_sec)
+
+            participant_rows = await conn.fetch(
+                """
+                SELECT user_id
+                FROM conversation_participants
+                WHERE conversation_id = $1
+                """,
+                conversation_uuid,
+            )
+            if participant_rows:
+                await conn.executemany(
+                    """
+                    INSERT INTO message_user_state (message_id, user_id, is_sender)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (message_id, user_id) DO NOTHING
+                    """,
+                    [
+                        (row["id"], participant["user_id"], participant["user_id"] == websocket.state.user_id)
+                        for participant in participant_rows
+                    ],
+                )
 
     except HTTPException as exc:
         detail = str(exc.detail)
@@ -362,6 +398,7 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         "sender_id": str(websocket.state.user_id),  # Sender's user ID (plaintext)
         "client_message_id": str(client_message_id) if client_message_id else None,
         "group_epoch": row["group_epoch"],
+        "expires_after_seen_sec": row["expires_after_seen_sec"] if "expires_after_seen_sec" in row else None,
         "ciphertext": ciphertext,
         "iv": iv,
         "created_at": row["created_at"].isoformat()
@@ -383,6 +420,151 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
 
     # Recipient first-message delivery is handled by the broadcast above after
     # recipient socket auto-subscription, avoiding duplicate deliveries.
+
+
+async def handle_message_seen(websocket: WebSocket, data: dict, pool):
+    message_id = data.get("message_id")
+    conversation_id = data.get("conversation_id")
+
+    if not message_id or not conversation_id:
+        await ws_manager.send_personal(websocket, {
+            "type": "error",
+            "code": "invalid_request",
+            "message": "Missing required fields: message_id, conversation_id",
+        })
+        return
+
+    try:
+        message_uuid = UUID(str(message_id))
+        conversation_uuid = UUID(str(conversation_id))
+    except ValueError:
+        await ws_manager.send_personal(websocket, {
+            "type": "error",
+            "code": "invalid_message_id",
+            "message": "Invalid message_id or conversation_id format",
+        })
+        return
+
+    try:
+        async with pool.acquire() as conn:
+            await require_conversation_participant(conn, conversation_uuid, websocket.state.user_id)
+
+            message_row = await conn.fetchrow(
+                """
+                SELECT id, sender_id, expires_after_seen_sec
+                FROM messages
+                WHERE id = $1
+                  AND conversation_id = $2
+                """,
+                message_uuid,
+                conversation_uuid,
+            )
+            if not message_row:
+                await ws_manager.send_personal(websocket, {
+                    "type": "error",
+                    "code": "message_not_found",
+                    "message": "Message not found",
+                })
+                return
+
+            if message_row["sender_id"] == websocket.state.user_id:
+                await ws_manager.send_personal(websocket, {
+                    "type": "error",
+                    "code": "invalid_seen_actor",
+                    "message": "Sender cannot mark own message as seen",
+                })
+                return
+
+            seen_row = await conn.fetchrow(
+                """
+                UPDATE message_user_state
+                SET seen_at = COALESCE(seen_at, NOW())
+                WHERE message_id = $1
+                  AND user_id = $2
+                  AND is_sender = FALSE
+                RETURNING seen_at
+                """,
+                message_uuid,
+                websocket.state.user_id,
+            )
+            if not seen_row:
+                await ws_manager.send_personal(websocket, {
+                    "type": "error",
+                    "code": "message_state_missing",
+                    "message": "Message state not found",
+                })
+                return
+
+            seen_at = seen_row["seen_at"]
+            ttl = message_row["expires_after_seen_sec"]
+            if ttl:
+                await conn.execute(
+                    """
+                    UPDATE message_user_state
+                    SET delete_after_seen_at = COALESCE(delete_after_seen_at, seen_at + ($3 * INTERVAL '1 second'))
+                    WHERE message_id = $1
+                      AND user_id = $2
+                    """,
+                    message_uuid,
+                    websocket.state.user_id,
+                    int(ttl),
+                )
+
+                all_seen = await conn.fetchval(
+                    """
+                    SELECT NOT EXISTS (
+                        SELECT 1
+                        FROM message_user_state
+                        WHERE message_id = $1
+                          AND is_sender = FALSE
+                          AND seen_at IS NULL
+                    )
+                    """,
+                    message_uuid,
+                )
+                if all_seen:
+                    await conn.execute(
+                        """
+                        UPDATE messages
+                        SET sender_delete_after_seen_at = COALESCE(
+                            sender_delete_after_seen_at,
+                            (
+                                SELECT MAX(seen_at) + ($2 * INTERVAL '1 second')
+                                FROM message_user_state
+                                WHERE message_id = $1
+                                  AND is_sender = FALSE
+                            )
+                        )
+                        WHERE id = $1
+                        """,
+                        message_uuid,
+                        int(ttl),
+                    )
+
+            await ws_manager.broadcast_to_conversation(
+                str(conversation_uuid),
+                {
+                    "type": "message_seen",
+                    "message_id": str(message_uuid),
+                    "conversation_id": str(conversation_uuid),
+                    "seen_by": str(websocket.state.user_id),
+                    "seen_at": seen_at.isoformat(),
+                },
+            )
+
+    except HTTPException as exc:
+        await ws_manager.send_personal(websocket, {
+            "type": "error",
+            "code": "forbidden",
+            "message": str(exc.detail),
+        })
+    except Exception as exc:
+        logger.error("message_seen_failed type=%s", type(exc).__name__)
+        await ws_manager.send_personal(websocket, {
+            "type": "error",
+            "code": "message_seen_failed",
+            "message": "Failed to mark message seen",
+        })
 
 
 async def handle_subscribe_user(websocket: WebSocket, pool):
