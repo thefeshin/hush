@@ -468,8 +468,9 @@ async def test_handle_message_seen_marks_seen_and_broadcasts(monkeypatch):
         fetchrow_side_effect=[
             {"id": message_id, "sender_id": sender_id, "expires_after_seen_sec": 30},
             {"seen_at": seen_at},
+            {"seen_count": 1, "total_recipients": 1, "all_recipients_seen": True},
         ],
-        fetchval_side_effect=[True, True, True],
+        fetchval_side_effect=[True, True, True, None],
     )
     pool = FakePool(conn)
     websocket = FakeWebSocket(user_id=recipient_id)
@@ -488,6 +489,9 @@ async def test_handle_message_seen_marks_seen_and_broadcasts(monkeypatch):
     assert payload["type"] == "message_seen"
     assert payload["message_id"] == str(message_id)
     assert payload["seen_by"] == str(recipient_id)
+    assert payload["seen_count"] == 1
+    assert payload["total_recipients"] == 1
+    assert payload["all_recipients_seen"] is True
 
 
 @pytest.mark.asyncio

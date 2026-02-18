@@ -16,6 +16,9 @@ interface Message {
   expiresAfterSeenSec?: 15 | 30 | 60;
   seenByUser?: Record<string, number>;
   deleteAfterSeenAt?: number;
+  senderDeleteAfterSeenAt?: number;
+  seenCount?: number;
+  totalRecipients?: number;
   allRecipientsSeen?: boolean;
   status: 'sending' | 'sent' | 'failed';
 }
@@ -39,7 +42,15 @@ interface MessageState {
   ) => string;
   markMessageSent: (tempId: string, realId: string) => void;
   markMessageFailed: (tempId: string) => void;
-  markMessageSeen: (messageId: string, seenByUserId: string, seenAt: number) => void;
+  markMessageSeen: (
+    messageId: string,
+    seenByUserId: string,
+    seenAt: number,
+    seenCount?: number,
+    totalRecipients?: number,
+    allRecipientsSeen?: boolean,
+    senderDeleteAfterSeenAt?: number,
+  ) => void;
   removeMessage: (messageId: string) => void;
   getMessages: (conversationId: string) => Message[];
 }
@@ -173,7 +184,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     });
   },
 
-  markMessageSeen: (messageId, seenByUserId, seenAt) => {
+  markMessageSeen: (messageId, seenByUserId, seenAt, seenCount, totalRecipients, allRecipientsSeen, senderDeleteAfterSeenAt) => {
     set(state => {
       const newMap = new Map(state.messagesByConversation);
 
@@ -199,6 +210,10 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             ...message,
             seenByUser,
             deleteAfterSeenAt,
+            seenCount: typeof seenCount === 'number' ? seenCount : message.seenCount,
+            totalRecipients: typeof totalRecipients === 'number' ? totalRecipients : message.totalRecipients,
+            allRecipientsSeen: typeof allRecipientsSeen === 'boolean' ? allRecipientsSeen : message.allRecipientsSeen,
+            senderDeleteAfterSeenAt: typeof senderDeleteAfterSeenAt === 'number' ? senderDeleteAfterSeenAt : message.senderDeleteAfterSeenAt,
           };
         });
 

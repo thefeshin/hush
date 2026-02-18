@@ -423,26 +423,26 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
 
 
 async def handle_message_seen(websocket: WebSocket, data: dict, pool):
+    async def send_seen_error(code: str, message: str):
+        increment_counter("message_seen_rejected_total")
+        await ws_manager.send_personal(websocket, {
+            "type": "error",
+            "code": code,
+            "message": message,
+        })
+
     message_id = data.get("message_id")
     conversation_id = data.get("conversation_id")
 
     if not message_id or not conversation_id:
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "code": "invalid_request",
-            "message": "Missing required fields: message_id, conversation_id",
-        })
+        await send_seen_error("invalid_request", "Missing required fields: message_id, conversation_id")
         return
 
     try:
         message_uuid = UUID(str(message_id))
         conversation_uuid = UUID(str(conversation_id))
     except ValueError:
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "code": "invalid_message_id",
-            "message": "Invalid message_id or conversation_id format",
-        })
+        await send_seen_error("invalid_message_id", "Invalid message_id or conversation_id format")
         return
 
     try:
@@ -460,19 +460,11 @@ async def handle_message_seen(websocket: WebSocket, data: dict, pool):
                 conversation_uuid,
             )
             if not message_row:
-                await ws_manager.send_personal(websocket, {
-                    "type": "error",
-                    "code": "message_not_found",
-                    "message": "Message not found",
-                })
+                await send_seen_error("message_not_found", "Message not found")
                 return
 
             if message_row["sender_id"] == websocket.state.user_id:
-                await ws_manager.send_personal(websocket, {
-                    "type": "error",
-                    "code": "invalid_seen_actor",
-                    "message": "Sender cannot mark own message as seen",
-                })
+                await send_seen_error("invalid_seen_actor", "Sender cannot mark own message as seen")
                 return
 
             seen_row = await conn.fetchrow(
@@ -488,11 +480,7 @@ async def handle_message_seen(websocket: WebSocket, data: dict, pool):
                 websocket.state.user_id,
             )
             if not seen_row:
-                await ws_manager.send_personal(websocket, {
-                    "type": "error",
-                    "code": "message_state_missing",
-                    "message": "Message state not found",
-                })
+                await send_seen_error("message_state_missing", "Message state not found")
                 return
 
             seen_at = seen_row["seen_at"]
@@ -541,6 +529,30 @@ async def handle_message_seen(websocket: WebSocket, data: dict, pool):
                         int(ttl),
                     )
 
+            aggregate = await conn.fetchrow(
+                """
+                SELECT
+                  COUNT(*) FILTER (WHERE is_sender = FALSE) AS total_recipients,
+                  COUNT(*) FILTER (WHERE is_sender = FALSE AND seen_at IS NOT NULL) AS seen_count,
+                  NOT EXISTS (
+                    SELECT 1
+                    FROM message_user_state
+                    WHERE message_id = $1
+                      AND is_sender = FALSE
+                      AND seen_at IS NULL
+                  ) AS all_recipients_seen
+                FROM message_user_state
+                WHERE message_id = $1
+                """,
+                message_uuid,
+            )
+            sender_delete_after_seen_at = await conn.fetchval(
+                "SELECT sender_delete_after_seen_at FROM messages WHERE id = $1",
+                message_uuid,
+            )
+
+            increment_counter("messages_seen_total")
+
             await ws_manager.broadcast_to_conversation(
                 str(conversation_uuid),
                 {
@@ -549,22 +561,18 @@ async def handle_message_seen(websocket: WebSocket, data: dict, pool):
                     "conversation_id": str(conversation_uuid),
                     "seen_by": str(websocket.state.user_id),
                     "seen_at": seen_at.isoformat(),
+                    "seen_count": int(aggregate["seen_count"]) if aggregate else 0,
+                    "total_recipients": int(aggregate["total_recipients"]) if aggregate else 0,
+                    "all_recipients_seen": bool(aggregate["all_recipients_seen"]) if aggregate else False,
+                    "sender_delete_after_seen_at": sender_delete_after_seen_at.isoformat() if sender_delete_after_seen_at else None,
                 },
             )
 
     except HTTPException as exc:
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "code": "forbidden",
-            "message": str(exc.detail),
-        })
+        await send_seen_error("forbidden", str(exc.detail))
     except Exception as exc:
         logger.error("message_seen_failed type=%s", type(exc).__name__)
-        await ws_manager.send_personal(websocket, {
-            "type": "error",
-            "code": "message_seen_failed",
-            "message": "Failed to mark message seen",
-        })
+        await send_seen_error("message_seen_failed", "Failed to mark message seen")
 
 
 async def handle_subscribe_user(websocket: WebSocket, pool):

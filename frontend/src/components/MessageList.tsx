@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, CheckCheck, Loader2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -14,6 +14,10 @@ interface Message {
   expiresAfterSeenSec?: 15 | 30 | 60;
   seenByUser?: Record<string, number>;
   deleteAfterSeenAt?: number;
+  senderDeleteAfterSeenAt?: number;
+  seenCount?: number;
+  totalRecipients?: number;
+  allRecipientsSeen?: boolean;
   status: 'sending' | 'sent' | 'failed';
 }
 
@@ -117,7 +121,18 @@ export function MessageList({ messages, currentUserId, onMessageVisible }: Props
               <div className={metaClass}>
                 <span>{formatTime(message.timestamp)}</span>
                 {isOwn && message.seenByUser && Object.keys(message.seenByUser).length > 0 && (
-                  <span>seen</span>
+                  <span>
+                    {typeof message.totalRecipients === 'number' && message.totalRecipients > 1
+                      ? (message.allRecipientsSeen
+                        ? 'all seen'
+                        : `seen ${message.seenCount || 0}/${message.totalRecipients}`)
+                      : 'seen'}
+                  </span>
+                )}
+                {isOwn && message.senderDeleteAfterSeenAt && (
+                  <span>
+                    {Math.max(0, Math.ceil((message.senderDeleteAfterSeenAt - Date.now()) / 1000))}s
+                  </span>
                 )}
                 {!isOwn && message.deleteAfterSeenAt && (
                   <span>
@@ -127,7 +142,11 @@ export function MessageList({ messages, currentUserId, onMessageVisible }: Props
                 {isOwn && (
                   <span className="inline-flex items-center">
                     {message.status === 'sending' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {message.status === 'sent' && <Check className="h-3.5 w-3.5" />}
+                    {message.status === 'sent' && (
+                      message.seenByUser && Object.keys(message.seenByUser).length > 0
+                        ? <CheckCheck className="h-3.5 w-3.5" />
+                        : <Check className="h-3.5 w-3.5" />
+                    )}
                     {message.status === 'failed' && <AlertTriangle className="h-3.5 w-3.5" />}
                   </span>
                 )}

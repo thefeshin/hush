@@ -14,6 +14,10 @@ interface ServerMessage {
   message_id?: string;
   seen_by?: string;
   seen_at?: string;
+  seen_count?: number;
+  total_recipients?: number;
+  all_recipients_seen?: boolean;
+  sender_delete_after_seen_at?: string;
   expires_after_seen_sec?: number;
   group_epoch?: number;
   group_name?: string;

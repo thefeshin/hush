@@ -174,7 +174,9 @@ async def get_messages(
         rows = await conn.fetch(
             """
             SELECT m.id, m.conversation_id, m.sender_id, m.group_epoch, m.expires_after_seen_sec,
-                   mus.seen_at, mus.delete_after_seen_at,
+                   mus.seen_at, mus.delete_after_seen_at, m.sender_delete_after_seen_at,
+                   (SELECT COUNT(*) FROM message_user_state r WHERE r.message_id = m.id AND r.is_sender = FALSE AND r.seen_at IS NOT NULL) AS seen_count,
+                   (SELECT COUNT(*) FROM message_user_state r WHERE r.message_id = m.id AND r.is_sender = FALSE) AS total_recipients,
                    NOT EXISTS (
                      SELECT 1 FROM message_user_state r
                      WHERE r.message_id = m.id
@@ -201,7 +203,9 @@ async def get_messages(
         rows = await conn.fetch(
             """
             SELECT m.id, m.conversation_id, m.sender_id, m.group_epoch, m.expires_after_seen_sec,
-                   mus.seen_at, mus.delete_after_seen_at,
+                   mus.seen_at, mus.delete_after_seen_at, m.sender_delete_after_seen_at,
+                   (SELECT COUNT(*) FROM message_user_state r WHERE r.message_id = m.id AND r.is_sender = FALSE AND r.seen_at IS NOT NULL) AS seen_count,
+                   (SELECT COUNT(*) FROM message_user_state r WHERE r.message_id = m.id AND r.is_sender = FALSE) AS total_recipients,
                    NOT EXISTS (
                      SELECT 1 FROM message_user_state r
                      WHERE r.message_id = m.id
@@ -233,6 +237,9 @@ async def get_messages(
             expires_after_seen_sec=row["expires_after_seen_sec"],
             seen_at=row["seen_at"],
             delete_after_seen_at=row["delete_after_seen_at"],
+            sender_delete_after_seen_at=row["sender_delete_after_seen_at"],
+            seen_count=row["seen_count"],
+            total_recipients=row["total_recipients"],
             all_recipients_seen=row["all_recipients_seen"],
             ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
             iv=base64.b64encode(row["iv"]).decode("ascii"),

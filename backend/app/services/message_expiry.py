@@ -24,7 +24,8 @@ async def process_due_message_expiry() -> None:
                   AND mus.deleted_at IS NULL
                   AND mus.delete_after_seen_at IS NOT NULL
                   AND mus.delete_after_seen_at <= NOW()
-                RETURNING mus.message_id, mus.user_id, m.conversation_id
+                RETURNING mus.message_id, mus.user_id, m.conversation_id,
+                          GREATEST(EXTRACT(EPOCH FROM (NOW() - mus.delete_after_seen_at)), 0) AS lag_seconds
             )
             SELECT * FROM due
             """
@@ -40,6 +41,12 @@ async def process_due_message_expiry() -> None:
                     "reason": "expired_after_seen",
                 },
             )
+            try:
+                lag = int(float(row.get("lag_seconds") or 0))
+            except Exception:
+                lag = 0
+            if lag > 0:
+                increment_counter("message_expiry_worker_lag_seconds_total", lag)
         if recipient_rows:
             increment_counter("messages_expired_recipient_total", len(recipient_rows))
 
@@ -51,7 +58,8 @@ async def process_due_message_expiry() -> None:
                 WHERE m.sender_deleted_at IS NULL
                   AND m.sender_delete_after_seen_at IS NOT NULL
                   AND m.sender_delete_after_seen_at <= NOW()
-                RETURNING m.id, m.sender_id, m.conversation_id
+                RETURNING m.id, m.sender_id, m.conversation_id,
+                          GREATEST(EXTRACT(EPOCH FROM (NOW() - m.sender_delete_after_seen_at)), 0) AS lag_seconds
             ), sender_state AS (
                 UPDATE message_user_state mus
                 SET deleted_at = NOW()
@@ -59,7 +67,7 @@ async def process_due_message_expiry() -> None:
                 WHERE mus.message_id = due.id
                   AND mus.is_sender = TRUE
                   AND mus.deleted_at IS NULL
-                RETURNING due.id AS message_id, due.sender_id, due.conversation_id
+                RETURNING due.id AS message_id, due.sender_id, due.conversation_id, due.lag_seconds
             )
             SELECT * FROM sender_state
             """
@@ -75,6 +83,12 @@ async def process_due_message_expiry() -> None:
                     "reason": "all_seen_then_expired",
                 },
             )
+            try:
+                lag = int(float(row.get("lag_seconds") or 0))
+            except Exception:
+                lag = 0
+            if lag > 0:
+                increment_counter("message_expiry_worker_lag_seconds_total", lag)
         if sender_rows:
             increment_counter("messages_expired_sender_total", len(sender_rows))
 

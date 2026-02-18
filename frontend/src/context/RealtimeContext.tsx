@@ -339,7 +339,15 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (msg.type === 'message_seen' && msg.message_id && msg.seen_by && msg.seen_at) {
-        markMessageSeen(msg.message_id, msg.seen_by, new Date(msg.seen_at).getTime());
+        markMessageSeen(
+          msg.message_id,
+          msg.seen_by,
+          new Date(msg.seen_at).getTime(),
+          msg.seen_count,
+          msg.total_recipients,
+          msg.all_recipients_seen,
+          msg.sender_delete_after_seen_at ? new Date(msg.sender_delete_after_seen_at).getTime() : undefined,
+        );
       }
 
       if ((msg.type === 'message_deleted_for_user' || msg.type === 'message_deleted_for_sender') && msg.message_id) {

@@ -38,6 +38,9 @@ class MessageResponse(BaseModel):
     expires_after_seen_sec: Optional[int] = None
     seen_at: Optional[datetime] = None
     delete_after_seen_at: Optional[datetime] = None
+    sender_delete_after_seen_at: Optional[datetime] = None
+    seen_count: Optional[int] = None
+    total_recipients: Optional[int] = None
     all_recipients_seen: Optional[bool] = None
     ciphertext: str
     iv: str
