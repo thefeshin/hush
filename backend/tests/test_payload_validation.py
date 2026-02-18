@@ -60,3 +60,23 @@ def test_message_schema_enforces_ciphertext_length_cap():
             ciphertext=too_long_ciphertext,
             iv=VALID_IV_B64,
         )
+
+
+def test_message_schema_rejects_invalid_group_epoch_low():
+    with pytest.raises(ValidationError):
+        MessageCreate(
+            conversation_id=uuid4(),
+            group_epoch=0,
+            ciphertext=base64.b64encode(b"hello").decode("ascii"),
+            iv=VALID_IV_B64,
+        )
+
+
+def test_message_schema_accepts_valid_group_epoch():
+    message = MessageCreate(
+        conversation_id=uuid4(),
+        group_epoch=7,
+        ciphertext=base64.b64encode(b"hello").decode("ascii"),
+        iv=VALID_IV_B64,
+    )
+    assert message.group_epoch == 7

@@ -180,6 +180,9 @@ ensure_ssl() {
 load_images_and_start() {
   local healthy=true
   local svc status
+  local -a compose_images
+  local image
+  local image_platform
 
   echo ""
   echo "[7/7] Loading Docker images and starting services..."
@@ -187,12 +190,26 @@ load_images_and_start() {
   docker load -i "$BUNDLE_PATH"
   echo "[OK] Images loaded"
 
+  mapfile -t compose_images < <(docker compose -f docker-compose.yml config --images 2>/dev/null | sed '/^[[:space:]]*$/d' | sort -u)
+  if [[ ${#compose_images[@]} -eq 0 ]]; then
+    fail "Could not resolve compose image list for platform verification"
+  fi
+
+  echo "[INFO] Verifying image platforms (expected linux/amd64)..."
+  for image in "${compose_images[@]}"; do
+    image_platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image" 2>/dev/null || true)"
+    if [[ "$image_platform" != "linux/amd64" ]]; then
+      fail "Image '$image' has platform '${image_platform:-unknown}'. Rebuild and transfer an amd64 bundle with ./offline/build-bundle.sh --target $TARGET_CODENAME"
+    fi
+    echo "  [OK] $image -> $image_platform"
+  done
+
   if [[ -f "$PROJECT_ROOT/docker-compose.override.yml" ]]; then
     echo "[INFO] Ignoring docker-compose.override.yml for air-gapped deploy"
   fi
 
-  docker compose -f docker-compose.yml down >/dev/null 2>&1 || true
-  docker compose -f docker-compose.yml up -d
+  DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -f docker-compose.yml down >/dev/null 2>&1 || true
+  DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -f docker-compose.yml up -d
 
   echo "  Waiting for services to initialize..."
   sleep 8

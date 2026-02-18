@@ -9,6 +9,7 @@ interface QueuedMessage {
   id: string;
   conversationId: string;
   recipientId?: string;
+  groupEpoch?: number;
   localMessageId: string;
   encrypted: EncryptedData;
   queuedAt: number;
@@ -24,7 +25,7 @@ interface QueueDBSchema extends DBSchema {
 }
 
 const DB_NAME = 'hush-queue';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let db: IDBPDatabase<QueueDBSchema> | null = null;
 
@@ -51,7 +52,8 @@ export async function queueMessage(
   conversationId: string,
   localMessageId: string,
   encrypted: EncryptedData,
-  recipientId?: string
+   recipientId?: string,
+   groupEpoch?: number,
 ): Promise<string> {
   const id = `queued-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -60,6 +62,7 @@ export async function queueMessage(
     id,
     conversationId,
     recipientId,
+    groupEpoch,
     localMessageId,
     encrypted,
     queuedAt: Date.now(),
@@ -117,7 +120,7 @@ export async function incrementAttempts(id: string): Promise<void> {
  * Process the queue (send pending messages)
  */
 export async function processQueue(
-  sendFn: (conversationId: string, encrypted: EncryptedData, recipientId?: string) => Promise<{ id: string }>,
+  sendFn: (conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => Promise<{ id: string }>,
   onSent?: (localMessageId: string, serverMessageId: string) => Promise<void>
 ): Promise<{ sent: number; failed: number }> {
   const messages = await getQueuedMessages();
@@ -133,7 +136,7 @@ export async function processQueue(
     }
 
     try {
-      const result = await sendFn(msg.conversationId, msg.encrypted, msg.recipientId);
+      const result = await sendFn(msg.conversationId, msg.encrypted, msg.recipientId, msg.groupEpoch);
       if (onSent) {
         await onSent(msg.localMessageId, result.id);
       }

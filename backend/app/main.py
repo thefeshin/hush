@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings, validate_security_settings
 from app.database import init_db, close_db
-from app.routers import auth, conversations, messages, health, websocket
+from app.routers import auth, conversations, messages, health, websocket, groups
 from app.middleware.security import SecurityMiddleware
 from app.logging_config import setup_logging
 from app.services.connection_cleanup import start_cleanup_task
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, tags=["health"])
     app.include_router(auth.router, prefix="/api", tags=["auth"])
     app.include_router(conversations.router, prefix="/api", tags=["conversations"])
+    app.include_router(groups.router, prefix="/api", tags=["groups"])
     app.include_router(messages.router, prefix="/api", tags=["messages"])
     app.include_router(websocket.router, tags=["websocket"])
 

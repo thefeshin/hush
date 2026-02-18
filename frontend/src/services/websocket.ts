@@ -7,10 +7,14 @@ import type { EncryptedData } from '../types/crypto';
 
 // Message types from server
 interface ServerMessage {
-  type: 'subscribed' | 'unsubscribed' | 'message' | 'message_sent' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed';
+  type: 'subscribed' | 'unsubscribed' | 'message' | 'message_sent' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed' | 'group_created' | 'group_member_added' | 'group_member_removed' | 'group_key_rotated';
   conversation_id?: string;
   sender_id?: string;  // Sender's user ID (plaintext, for auto-discovery)
   id?: string;
+  group_epoch?: number;
+  group_name?: string;
+  user_id?: string;
+  role?: string;
   ciphertext?: string;
   iv?: string;
   created_at?: string;
@@ -35,6 +39,7 @@ interface ClientMessage {
   type: 'message';
   conversation_id: string;
   recipient_id?: string;
+  group_epoch?: number;
   client_message_id: string;
   ciphertext: string;
   iv: string;
@@ -195,7 +200,7 @@ export class WebSocketService {
   /**
    * Send an encrypted message
    */
-  sendMessage(conversationId: string, encrypted: EncryptedData, recipientId?: string): Promise<{ id: string }> {
+  sendMessage(conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number): Promise<{ id: string }> {
     return new Promise((resolve, reject) => {
       if (this.state !== ConnectionState.CONNECTED || !this.ws) {
         reject(new Error('Not connected'));
@@ -219,6 +224,7 @@ export class WebSocketService {
           type: 'message',
           conversation_id: conversationId,
           recipient_id: recipientId,
+          group_epoch: groupEpoch,
           client_message_id: tempId,
           ciphertext: encrypted.ciphertext,
           iv: encrypted.iv

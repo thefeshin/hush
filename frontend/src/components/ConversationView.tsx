@@ -22,7 +22,7 @@ export function ConversationView({ conversationId }: Props) {
   const user = useAuthStore((state) => state.user);
   const { getConversation, setActiveConversation } = useConversationStore();
   const { loadMessagesForConversation, getMessages } = useMessageStore();
-  const { getConversationKey, decryptMessage } = useCrypto();
+  const { getConversationKey, getGroupKey, decryptMessage } = useCrypto();
   const navigate = useNavigate();
 
   const conversation = getConversation(conversationId);
@@ -39,16 +39,15 @@ export function ConversationView({ conversationId }: Props) {
   }, [conversationId, user, conversation]);
 
   const loadConversationMessages = async () => {
-    if (!user || !conversation || !conversation.participantId) return;
+    if (!user || !conversation) return;
 
     try {
       const syncService = getSyncService();
       await syncService.syncConversation(conversationId, null);
 
-      const conversationKey = await getConversationKey(
-        user.id,
-        conversation.participantId,
-      );
+      const conversationKey = conversation.kind === 'group'
+        ? await getGroupKey(conversationId, conversation.keyEpoch || 1)
+        : await getConversationKey(user.id, conversation.participantId);
 
       await loadMessagesForConversation(conversationId, async (encrypted) => {
         return decryptMessage(conversationKey, encrypted);
@@ -89,6 +88,8 @@ export function ConversationView({ conversationId }: Props) {
       <MessageComposer
         conversationId={conversationId}
         participantId={conversation.participantId}
+        conversationKind={conversation.kind}
+        groupEpoch={conversation.keyEpoch}
       />
     </div>
   );
