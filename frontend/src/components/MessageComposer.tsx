@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useConversationStore } from '../stores/conversationStore';
@@ -10,6 +11,8 @@ import { useCrypto } from '../crypto/CryptoContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { saveMessage } from '../services/storage';
 import { queueMessage } from '../services/messageQueue';
+import { getGroupState } from '../services/api';
+import { ensureGroupSendReadiness } from '../crypto/group-send';
 import type { MessagePayload } from '../types/crypto';
 
 interface Props {
@@ -26,7 +29,7 @@ export function MessageComposer({ conversationId, participantId, conversationKin
 
   const user = useAuthStore(state => state.user);
   const { addPendingMessage, markMessageSent, markMessageFailed } = useMessageStore();
-  const { updateLastMessage } = useConversationStore();
+  const { updateLastMessage, getConversation, upsertConversation } = useConversationStore();
   const { getConversationKey, getGroupKey, encryptMessage } = useCrypto();
   const { sendMessage, isConnected } = useWebSocket();
 
@@ -48,6 +51,32 @@ export function MessageComposer({ conversationId, participantId, conversationKin
     if (!trimmedContent || !user || isSending) return;
 
     setIsSending(true);
+
+    if (conversationKind === 'group') {
+      const expectedEpoch = groupEpoch || 1;
+      const readiness = await ensureGroupSendReadiness(conversationId, expectedEpoch, getGroupState);
+      if (!readiness.ok) {
+        if (readiness.reason === 'stale_epoch' && readiness.epoch) {
+          const existing = getConversation(conversationId);
+          if (existing) {
+            upsertConversation({
+              ...existing,
+              keyEpoch: readiness.epoch,
+            });
+          }
+          toast.error('Group key updated. Please send again.');
+        } else if (readiness.reason === 'missing_envelope') {
+          toast.error('Cannot send yet: your group key is not ready. Try again shortly.');
+        } else {
+          toast.error('Cannot verify group key right now. Please retry.');
+        }
+
+        setIsSending(false);
+        focusComposerInput();
+        return;
+      }
+    }
+
     setContent('');
 
     // Add pending message immediately (optimistic UI)

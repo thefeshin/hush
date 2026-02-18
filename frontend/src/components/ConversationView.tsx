@@ -2,23 +2,25 @@
  * Conversation view with real-time subscription
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import { useConversationStore } from "../stores/conversationStore";
 import { useMessageStore } from "../stores/messageStore";
 import { useCrypto } from "../crypto/CryptoContext";
 import { getSyncService } from "../services/sync";
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Users } from 'lucide-react';
 import { useConversationSubscription } from "../hooks/useConversationSubscription";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
+import { GroupMembersModal } from './GroupMembersModal';
 
 interface Props {
   conversationId: string;
 }
 
 export function ConversationView({ conversationId }: Props) {
+  const [showGroupMembers, setShowGroupMembers] = useState(false);
   const user = useAuthStore((state) => state.user);
   const { getConversation, setActiveConversation } = useConversationStore();
   const { loadMessagesForConversation, getMessages } = useMessageStore();
@@ -81,6 +83,17 @@ export function ConversationView({ conversationId }: Props) {
         <div className="ml-1">
           <h2 className="text-h2">{conversation.participantUsername}</h2>
         </div>
+        {conversation.kind === 'group' && (
+          <button
+            type="button"
+            className="ml-auto inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-border bg-bg-primary text-text-primary"
+            onClick={() => setShowGroupMembers(true)}
+            aria-label="Manage group members"
+            title="Manage members"
+          >
+            <Users className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       <MessageList messages={messages} currentUserId={user?.id || ""} />
@@ -91,6 +104,13 @@ export function ConversationView({ conversationId }: Props) {
         conversationKind={conversation.kind}
         groupEpoch={conversation.keyEpoch}
       />
+
+      {showGroupMembers && conversation.kind === 'group' && (
+        <GroupMembersModal
+          conversationId={conversationId}
+          onClose={() => setShowGroupMembers(false)}
+        />
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
  * Maintains one WebSocket orchestration path for the whole app.
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { wsService, ConnectionState } from '../services/websocket';
 import { getSyncService } from '../services/sync';
 import { getGroupState } from '../services/api';
@@ -40,6 +40,7 @@ const RealtimeContext = createContext<RealtimeContextValue | null>(null);
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>(wsService.getState());
   const [userSubscribed, setUserSubscribed] = useState(false);
+  const processedGroupEventsRef = useRef<Set<string>>(new Set());
 
   const { isAuthenticated, user } = useAuthStore();
   const { addMessage, markMessageSent } = useMessageStore();
@@ -73,6 +74,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       wsService.disconnect();
       setUserSubscribed(false);
       setConnectionState(ConnectionState.DISCONNECTED);
+      processedGroupEventsRef.current.clear();
       return;
     }
 
@@ -80,6 +82,39 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       console.error('Realtime connection failed', error);
     });
   }, [isAuthenticated, isUnlocked]);
+
+  const shouldProcessGroupEvent = useCallback((msg: {
+    type: string;
+    conversation_id?: string;
+    user_id?: string;
+    key_epoch?: number;
+  }): boolean => {
+    if (!msg.conversation_id) {
+      return true;
+    }
+
+    const eventKey = [
+      msg.type,
+      msg.conversation_id,
+      msg.user_id || '',
+      typeof msg.key_epoch === 'number' ? msg.key_epoch : '',
+    ].join(':');
+
+    if (processedGroupEventsRef.current.has(eventKey)) {
+      return false;
+    }
+
+    processedGroupEventsRef.current.add(eventKey);
+    if (processedGroupEventsRef.current.size > 500) {
+      const iterator = processedGroupEventsRef.current.values();
+      const oldest = iterator.next().value;
+      if (oldest) {
+        processedGroupEventsRef.current.delete(oldest);
+      }
+    }
+
+    return true;
+  }, []);
 
   // Subscribe to all user conversations once per active connection.
   useEffect(() => {
@@ -274,6 +309,11 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
       if ((msg.type === 'group_member_added' || msg.type === 'group_member_removed' || msg.type === 'group_key_rotated')
         && msg.conversation_id) {
+        if (!shouldProcessGroupEvent(msg)) {
+          setConnectionState(wsService.getState());
+          return;
+        }
+
         if (msg.type === 'group_member_added' && msg.user_id && user && msg.user_id === user.id) {
           await ensureGroupConversationVisibleForUser(msg.conversation_id, msg.group_name, msg.group_epoch);
         }
@@ -288,6 +328,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (msg.type === 'group_created' && msg.conversation_id) {
+        if (!shouldProcessGroupEvent(msg)) {
+          setConnectionState(wsService.getState());
+          return;
+        }
         await ensureGroupConversationVisibleForUser(msg.conversation_id, msg.group_name, msg.group_epoch);
       }
 
@@ -298,7 +342,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       unsubConnection();
       unsubMessage();
     };
-  }, [handleIncomingMessage, getConversation, upsertConversation, ensureGroupConversationVisibleForUser, user]);
+  }, [handleIncomingMessage, getConversation, upsertConversation, ensureGroupConversationVisibleForUser, shouldProcessGroupEvent, user]);
 
   const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => {
     return wsService.sendMessage(conversationId, encrypted, recipientId, groupEpoch);
