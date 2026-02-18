@@ -296,6 +296,12 @@ export interface GroupState {
   my_encrypted_key_envelope?: string | null;
 }
 
+export interface GroupMemberUpsertPayload {
+  user_id: string;
+  role?: 'owner' | 'admin' | 'member';
+  encrypted_key_envelope?: string;
+}
+
 export async function createGroup(payload: GroupCreatePayload): Promise<GroupSummary> {
   const response = await fetch(`${API_BASE}/groups`, {
     method: 'POST',
@@ -318,6 +324,37 @@ export async function getGroupState(groupId: string): Promise<GroupState> {
 
   if (!response.ok) {
     throw new Error('Failed to fetch group state');
+  }
+
+  return response.json();
+}
+
+export async function addGroupMember(groupId: string, payload: GroupMemberUpsertPayload): Promise<GroupState> {
+  const response = await fetch(`${API_BASE}/groups/${groupId}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      ...payload,
+      role: payload.role || 'member',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to add group member');
+  }
+
+  return response.json();
+}
+
+export async function removeGroupMember(groupId: string, memberId: string): Promise<GroupState> {
+  const response = await fetch(`${API_BASE}/groups/${groupId}/members/${memberId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to remove group member');
   }
 
   return response.json();

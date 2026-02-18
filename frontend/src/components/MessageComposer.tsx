@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useConversationStore } from '../stores/conversationStore';
@@ -10,6 +11,8 @@ import { useCrypto } from '../crypto/CryptoContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { saveMessage } from '../services/storage';
 import { queueMessage } from '../services/messageQueue';
+import { getGroupState } from '../services/api';
+import { ensureGroupSendReadiness } from '../crypto/group-send';
 import type { MessagePayload } from '../types/crypto';
 
 interface Props {
@@ -26,13 +29,19 @@ export function MessageComposer({ conversationId, participantId, conversationKin
 
   const user = useAuthStore(state => state.user);
   const { addPendingMessage, markMessageSent, markMessageFailed } = useMessageStore();
-  const { updateLastMessage } = useConversationStore();
+  const { updateLastMessage, getConversation, upsertConversation } = useConversationStore();
   const { getConversationKey, getGroupKey, encryptMessage } = useCrypto();
   const { sendMessage, isConnected } = useWebSocket();
 
+  const focusComposerInput = () => {
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  };
+
   // Focus input on mount and when conversation changes.
   useEffect(() => {
-    inputRef.current?.focus();
+    focusComposerInput();
   }, [conversationId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,6 +51,32 @@ export function MessageComposer({ conversationId, participantId, conversationKin
     if (!trimmedContent || !user || isSending) return;
 
     setIsSending(true);
+
+    if (conversationKind === 'group') {
+      const expectedEpoch = groupEpoch || 1;
+      const readiness = await ensureGroupSendReadiness(conversationId, expectedEpoch, getGroupState);
+      if (!readiness.ok) {
+        if (readiness.reason === 'stale_epoch' && readiness.epoch) {
+          const existing = getConversation(conversationId);
+          if (existing) {
+            upsertConversation({
+              ...existing,
+              keyEpoch: readiness.epoch,
+            });
+          }
+          toast.error('Group key updated. Please send again.');
+        } else if (readiness.reason === 'missing_envelope') {
+          toast.error('Cannot send yet: your group key is not ready. Try again shortly.');
+        } else {
+          toast.error('Cannot verify group key right now. Please retry.');
+        }
+
+        setIsSending(false);
+        focusComposerInput();
+        return;
+      }
+    }
+
     setContent('');
 
     // Add pending message immediately (optimistic UI)
@@ -121,7 +156,7 @@ export function MessageComposer({ conversationId, participantId, conversationKin
       markMessageFailed(tempId);
     } finally {
       setIsSending(false);
-      inputRef.current?.focus();
+      focusComposerInput();
     }
   };
 
@@ -141,11 +176,11 @@ export function MessageComposer({ conversationId, participantId, conversationKin
         onKeyDown={handleKeyDown}
         placeholder={isConnected ? 'Type a message...' : 'Offline - message will be queued...'}
         rows={1}
-        disabled={isSending}
         className="max-h-[150px] flex-1 resize-none rounded-3xl border border-border bg-bg-primary px-4 py-3 text-body text-text-primary outline-none focus:border-accent"
       />
       <button
         type="submit"
+        onMouseDown={e => e.preventDefault()}
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-accent text-h2 text-zinc-900 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
         disabled={!content.trim() || isSending}
         title={isConnected ? 'Send message' : 'Queue message (offline)'}

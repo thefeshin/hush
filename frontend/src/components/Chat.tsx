@@ -113,14 +113,14 @@ export function Chat() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-dvh items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-border border-t-accent" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       <Sidebar isConversationRoute={isConversationRoute} activeTab={activeTab} />
       <main className={`${isConversationRoute ? 'flex' : 'hidden'} h-[100dvh] w-full min-w-0 flex-col bg-bg-primary`}>
         {activeConversationId ? (

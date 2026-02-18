@@ -2,6 +2,7 @@
 Group conversation endpoints.
 """
 
+import logging
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,9 +17,11 @@ from app.schemas.group import (
     GroupStateResponse,
 )
 from app.services.authorization import require_group_admin, require_group_member
+from app.services.telemetry import increment_counter
 from app.services.websocket import ws_manager
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/groups", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
@@ -122,6 +125,15 @@ async def create_group(
     }
     await ws_manager.broadcast_to_conversation(str(conversation_id), group_event)
 
+    member_ids = [member_id for member_id in payload.member_ids if member_id != user.user_id]
+    for member_id in member_ids:
+        member_user_id = str(member_id)
+        await ws_manager.subscribe_user_connections_to_conversation(member_user_id, str(conversation_id))
+        await ws_manager.send_to_user(member_user_id, group_event)
+
+    increment_counter("group_created_total")
+    logger.info("group_created group_id=%s created_by=%s members=%s", conversation_id, user.user_id, len(member_ids) + 1)
+
     return GroupResponse(
         id=row["id"],
         conversation_id=row["id"],
@@ -139,6 +151,35 @@ async def add_group_member(
     user: AuthenticatedUser = Depends(get_current_user),
 ):
     await require_group_admin(conn, group_id, user.user_id)
+
+    existing_role = await conn.fetchval(
+        """
+        SELECT role
+        FROM group_members
+        WHERE group_id = $1
+          AND user_id = $2
+          AND removed_at IS NULL
+        """,
+        group_id,
+        payload.user_id,
+    )
+
+    if existing_role == "owner" and payload.role != "owner":
+        owner_count = await conn.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM group_members
+            WHERE group_id = $1
+              AND role = 'owner'
+              AND removed_at IS NULL
+            """,
+            group_id,
+        )
+        if owner_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot demote the last owner",
+            )
 
     async with conn.transaction():
         await conn.execute(
@@ -182,6 +223,11 @@ async def add_group_member(
                 payload.encrypted_key_envelope,
             )
 
+    group_name = await conn.fetchval(
+        "SELECT group_name FROM conversations WHERE id = $1",
+        group_id,
+    )
+
     await ws_manager.broadcast_to_conversation(
         str(group_id),
         {
@@ -189,6 +235,17 @@ async def add_group_member(
             "conversation_id": str(group_id),
             "user_id": str(payload.user_id),
             "role": payload.role,
+            "group_name": group_name or "Unnamed Group",
+            "key_epoch": int(new_epoch),
+        },
+    )
+    await ws_manager.subscribe_user_connections_to_conversation(str(payload.user_id), str(group_id))
+    await ws_manager.send_to_user(
+        str(payload.user_id),
+        {
+            "type": "group_created",
+            "conversation_id": str(group_id),
+            "group_name": group_name or "Unnamed Group",
             "key_epoch": int(new_epoch),
         },
     )
@@ -199,6 +256,16 @@ async def add_group_member(
             "conversation_id": str(group_id),
             "key_epoch": int(new_epoch),
         },
+    )
+
+    increment_counter("group_member_added_total")
+    logger.info(
+        "group_member_added group_id=%s actor=%s member=%s role=%s epoch=%s",
+        group_id,
+        user.user_id,
+        payload.user_id,
+        payload.role,
+        int(new_epoch),
     )
 
     return await get_group_state(group_id, conn, user)
@@ -269,6 +336,15 @@ async def remove_group_member(
             "conversation_id": str(group_id),
             "key_epoch": int(new_epoch),
         },
+    )
+
+    increment_counter("group_member_removed_total")
+    logger.info(
+        "group_member_removed group_id=%s actor=%s member=%s epoch=%s",
+        group_id,
+        user.user_id,
+        member_id,
+        int(new_epoch),
     )
 
     return await get_group_state(group_id, conn, user)
