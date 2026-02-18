@@ -11,7 +11,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useCrypto } from '../crypto/CryptoContext';
-import { replaceMessageId, saveConversation, saveMessage } from '../services/storage';
+import { deleteMessage, replaceMessageId, saveConversation, saveMessage } from '../services/storage';
 import { processQueue } from '../services/messageQueue';
 import type { ConversationMetadata, EncryptedData, MessagePayload } from '../types/crypto';
 import { ensureGroupConversationVisible } from './realtimeGroup';
@@ -29,7 +29,8 @@ function msgEpoch(current?: number, incoming?: number): number {
 interface RealtimeContextValue {
   connectionState: ConnectionState;
   isConnected: boolean;
-  sendMessage: (conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => Promise<{ id: string }>;
+  sendMessage: (conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number, expiresAfterSeenSec?: number) => Promise<{ id: string }>;
+  sendMessageSeen: (conversationId: string, messageId: string) => void;
   subscribeConversation: (conversationId: string) => void;
   unsubscribeConversation: (conversationId: string) => void;
   disconnect: () => void;
@@ -41,9 +42,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>(wsService.getState());
   const [userSubscribed, setUserSubscribed] = useState(false);
   const processedGroupEventsRef = useRef<Set<string>>(new Set());
+  const sentSeenRef = useRef<Set<string>>(new Set());
 
   const { isAuthenticated, user } = useAuthStore();
-  const { addMessage, markMessageSent } = useMessageStore();
+  const { addMessage, markMessageSent, markMessageSeen, removeMessage } = useMessageStore();
   const { updateLastMessage, incrementUnread, getConversation, upsertConversation } = useConversationStore();
   const { isUnlocked, getConversationKey, getGroupKey, decryptMessage, encryptIdentity } = useCrypto();
 
@@ -75,6 +77,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       setUserSubscribed(false);
       setConnectionState(ConnectionState.DISCONNECTED);
       processedGroupEventsRef.current.clear();
+      sentSeenRef.current.clear();
       return;
     }
 
@@ -258,12 +261,12 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
 
       await processQueue(
-        async (conversationId, encrypted, recipientId, groupEpoch) => {
+        async (conversationId, encrypted, recipientId, groupEpoch, expiresAfterSeenSec) => {
           try {
-            return await wsService.sendMessage(conversationId, encrypted, recipientId, groupEpoch);
+            return await wsService.sendMessage(conversationId, encrypted, recipientId, groupEpoch, expiresAfterSeenSec);
           } catch {
             const syncService = getSyncService();
-            return await syncService.sendMessage(conversationId, encrypted, recipientId, groupEpoch);
+            return await syncService.sendMessage(conversationId, encrypted, recipientId, groupEpoch, expiresAfterSeenSec);
           }
         },
         async (localMessageId, serverMessageId) => {
@@ -335,6 +338,17 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         await ensureGroupConversationVisibleForUser(msg.conversation_id, msg.group_name, msg.group_epoch);
       }
 
+      if (msg.type === 'message_seen' && msg.message_id && msg.seen_by && msg.seen_at) {
+        markMessageSeen(msg.message_id, msg.seen_by, new Date(msg.seen_at).getTime());
+      }
+
+      if ((msg.type === 'message_deleted_for_user' || msg.type === 'message_deleted_for_sender') && msg.message_id) {
+        removeMessage(msg.message_id);
+        deleteMessage(msg.message_id).catch(() => {
+          // Best-effort local cleanup; API is source of truth.
+        });
+      }
+
       setConnectionState(wsService.getState());
     });
 
@@ -342,10 +356,19 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       unsubConnection();
       unsubMessage();
     };
-  }, [handleIncomingMessage, getConversation, upsertConversation, ensureGroupConversationVisibleForUser, shouldProcessGroupEvent, user]);
+  }, [handleIncomingMessage, getConversation, upsertConversation, ensureGroupConversationVisibleForUser, shouldProcessGroupEvent, markMessageSeen, removeMessage, user]);
 
-  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => {
-    return wsService.sendMessage(conversationId, encrypted, recipientId, groupEpoch);
+  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number, expiresAfterSeenSec?: number) => {
+    return wsService.sendMessage(conversationId, encrypted, recipientId, groupEpoch, expiresAfterSeenSec);
+  }, []);
+
+  const sendMessageSeen = useCallback((conversationId: string, messageId: string) => {
+    const seenKey = `${conversationId}:${messageId}`;
+    if (sentSeenRef.current.has(seenKey)) {
+      return;
+    }
+    sentSeenRef.current.add(seenKey);
+    wsService.sendMessageSeen(conversationId, messageId);
   }, []);
 
   const subscribeConversation = useCallback((conversationId: string) => {
@@ -366,12 +389,14 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     connectionState,
     isConnected: connectionState === ConnectionState.CONNECTED,
     sendMessage,
+    sendMessageSeen,
     subscribeConversation,
     unsubscribeConversation,
     disconnect
   }), [
     connectionState,
     sendMessage,
+    sendMessageSeen,
     subscribeConversation,
     unsubscribeConversation,
     disconnect

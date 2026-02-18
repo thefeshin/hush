@@ -233,6 +233,13 @@ export async function saveMessage(
 }
 
 /**
+ * Delete a single message by ID
+ */
+export async function deleteMessage(id: string): Promise<void> {
+  await getDB().delete('messages', id);
+}
+
+/**
  * Replace a local message ID with the canonical server ID.
  */
 export async function replaceMessageId(oldId: string, newId: string): Promise<void> {

@@ -108,6 +108,7 @@ export class SyncService {
     encrypted: EncryptedData,
     recipientId?: string,
     groupEpoch?: number,
+    expiresAfterSeenSec?: 15 | 30 | 60,
   ): Promise<{ id: string; created_at: string }> {
     const response = await this.authFetch("/messages", {
       method: "POST",
@@ -116,6 +117,7 @@ export class SyncService {
         conversation_id: conversationId,
         recipient_id: recipientId,
         group_epoch: groupEpoch,
+        expires_after_seen_sec: expiresAfterSeenSec,
         ciphertext: encrypted.ciphertext,
         iv: encrypted.iv,
       }),

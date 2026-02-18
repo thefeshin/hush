@@ -119,4 +119,21 @@ describe('WebSocketService message ack handling', () => {
 
     await expect(sendPromise).resolves.toEqual({ id: 'group-message-id' });
   });
+
+  it('sends message_seen payload', async () => {
+    const { wsService } = await import('./websocket');
+
+    const connectPromise = wsService.connect();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+    await connectPromise;
+
+    wsService.sendMessageSeen('conversation-1', 'message-1');
+
+    const seenPayloadRaw = socket.sent.find((payload) => JSON.parse(payload).type === 'message_seen');
+    expect(seenPayloadRaw).toBeTruthy();
+    const seenPayload = JSON.parse(seenPayloadRaw as string);
+    expect(seenPayload.conversation_id).toBe('conversation-1');
+    expect(seenPayload.message_id).toBe('message-1');
+  });
 });

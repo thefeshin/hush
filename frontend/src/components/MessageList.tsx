@@ -11,21 +11,65 @@ interface Message {
   senderName: string;
   content: string;
   timestamp: number;
+  expiresAfterSeenSec?: 15 | 30 | 60;
+  seenByUser?: Record<string, number>;
+  deleteAfterSeenAt?: number;
   status: 'sending' | 'sent' | 'failed';
 }
 
 interface Props {
   messages: Message[];
   currentUserId: string;
+  onMessageVisible?: (messageId: string) => void;
 }
 
-export function MessageList({ messages, currentUserId }: Props) {
+export function MessageList({ messages, currentUserId, onMessageVisible }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const seenReportedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!onMessageVisible || !listRef.current) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.6) {
+            continue;
+          }
+
+          const element = entry.target as HTMLElement;
+          const messageId = element.dataset.messageId;
+          const isOwn = element.dataset.own === 'true';
+
+          if (!messageId || isOwn || seenReportedRef.current.has(messageId)) {
+            continue;
+          }
+
+          seenReportedRef.current.add(messageId);
+          onMessageVisible(messageId);
+          observer.unobserve(element);
+        }
+      },
+      {
+        root: listRef.current,
+        threshold: [0.6],
+      },
+    );
+
+    const messageElements = listRef.current.querySelectorAll<HTMLElement>('[data-message-id]');
+    messageElements.forEach((element) => observer.observe(element));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [messages, onMessageVisible]);
 
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString([], {
@@ -59,7 +103,12 @@ export function MessageList({ messages, currentUserId }: Props) {
         const metaClass = `mt-1 flex justify-end gap-2 text-caption ${isOwn ? 'text-zinc-700' : 'text-text-secondary'}`;
 
         return (
-          <div key={message.id} className={messageContainerClass}>
+          <div
+            key={message.id}
+            className={messageContainerClass}
+            data-message-id={message.id}
+            data-own={isOwn ? 'true' : 'false'}
+          >
             {showSender && (
               <div className="mb-1 ml-2 text-caption text-text-secondary">{message.senderName}</div>
             )}
@@ -67,6 +116,14 @@ export function MessageList({ messages, currentUserId }: Props) {
               <div className="whitespace-pre-wrap break-words">{message.content}</div>
               <div className={metaClass}>
                 <span>{formatTime(message.timestamp)}</span>
+                {isOwn && message.seenByUser && Object.keys(message.seenByUser).length > 0 && (
+                  <span>seen</span>
+                )}
+                {!isOwn && message.deleteAfterSeenAt && (
+                  <span>
+                    {Math.max(0, Math.ceil((message.deleteAfterSeenAt - Date.now()) / 1000))}s
+                  </span>
+                )}
                 {isOwn && (
                   <span className="inline-flex items-center">
                     {message.status === 'sending' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
