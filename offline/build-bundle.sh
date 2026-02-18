@@ -189,13 +189,20 @@ build_image_bundle() {
   local -a compose_images
   local image
   local -a build_args
+  local image_platform
+  local local_image_platform
+  local pulled_platform_variant
+  local save_supports_platform=false
+  local inspect_supports_platform=false
 
   build_args=(build)
   if [[ "$NO_CACHE" == true ]]; then
     build_args+=(--no-cache)
   fi
+  build_args+=(--pull)
 
-  "${COMPOSE_CMD[@]}" "${build_args[@]}"
+  echo "[bundle] Building images for linux/${TARGET_ARCH}"
+  DOCKER_DEFAULT_PLATFORM="linux/${TARGET_ARCH}" "${COMPOSE_CMD[@]}" "${build_args[@]}"
 
   compose_images=()
   while IFS= read -r image; do
@@ -204,15 +211,49 @@ build_image_bundle() {
 
   [[ ${#compose_images[@]} -gt 0 ]] || fail "Could not resolve docker images from compose config"
 
+  if docker image save --help 2>/dev/null | grep -q -- '--platform'; then
+    save_supports_platform=true
+  fi
+  if docker image inspect --help 2>/dev/null | grep -q -- '--platform'; then
+    inspect_supports_platform=true
+  fi
+
+  if [[ "$save_supports_platform" != true || "$inspect_supports_platform" != true ]]; then
+    fail "Your Docker CLI does not support platform-pinned inspect/save. Please upgrade Docker (or build bundle on an amd64 host) to export an amd64-only offline tar."
+  fi
+
   : > "$TMP_DIR/images.txt"
   for image in "${compose_images[@]}"; do
     echo "$image" >> "$TMP_DIR/images.txt"
-    if ! docker image inspect "$image" >/dev/null 2>&1; then
-      docker pull "$image" >/dev/null
+
+    local_image_platform=""
+    if docker image inspect "$image" >/dev/null 2>&1; then
+      local_image_platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image" 2>/dev/null || true)"
     fi
+
+    pulled_platform_variant=false
+    if docker pull --platform "linux/${TARGET_ARCH}" "$image" >/dev/null 2>&1; then
+      pulled_platform_variant=true
+    elif [[ -z "$local_image_platform" ]]; then
+      fail "Image $image is not available locally and could not be pulled for linux/${TARGET_ARCH}."
+    else
+      echo "[bundle] Using local image $image (could not pull remote tag)"
+    fi
+
+    if [[ "$pulled_platform_variant" == true ]]; then
+      image_platform="$(docker image inspect --platform "linux/${TARGET_ARCH}" --format '{{.Os}}/{{.Architecture}}' "$image" 2>/dev/null || true)"
+    else
+      image_platform="$local_image_platform"
+    fi
+
+    if [[ "$image_platform" != "linux/${TARGET_ARCH}" ]]; then
+      fail "Image $image resolved to platform '${image_platform:-unknown}', expected linux/${TARGET_ARCH}. Rebuild/pull failed."
+    fi
+
+    echo "[bundle] Using $image ($image_platform variant)"
   done
 
-  docker save "${compose_images[@]}" -o "$TMP_DIR/hush-offline-bundle.tar"
+  docker image save --platform "linux/${TARGET_ARCH}" -o "$TMP_DIR/hush-offline-bundle.tar" "${compose_images[@]}"
 }
 
 prepare_target_layout() {
