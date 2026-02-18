@@ -9,6 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.services.websocket import ws_manager
+from app.services.telemetry import increment_counter
 from app.dependencies.auth import verify_websocket_token, extract_ws_token
 from app.database import get_pool
 from app.security_limits import (
@@ -313,11 +314,21 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
                     conversation_uuid,
                 )
                 if current_epoch is None:
+                    increment_counter("group_not_found_total")
+                    logger.warning("group_not_found conversation_id=%s user_id=%s", conversation_id, websocket.state.user_id)
                     await ws_manager.send_personal(websocket, build_error("group_not_found", "Group not found"))
                     return
                 if normalized_group_epoch is None:
                     normalized_group_epoch = int(current_epoch)
                 elif int(current_epoch) != int(normalized_group_epoch):
+                    increment_counter("stale_group_epoch_total")
+                    logger.warning(
+                        "stale_group_epoch conversation_id=%s user_id=%s expected=%s actual=%s",
+                        conversation_id,
+                        websocket.state.user_id,
+                        current_epoch,
+                        normalized_group_epoch,
+                    )
                     await ws_manager.send_personal(websocket, build_error("stale_group_epoch", "stale_group_epoch"))
                     return
 

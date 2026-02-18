@@ -156,7 +156,7 @@ async def test_add_group_member_rotates_epoch_and_broadcasts_events(monkeypatch)
     member_id = uuid4()
 
     conn = make_conn()
-    conn.fetchval = AsyncMock(side_effect=[5, "Ops"])
+    conn.fetchval = AsyncMock(side_effect=[None, 5, "Ops"])
 
     user = make_user()
     payload = groups_router.GroupMemberAddRequest(
@@ -180,6 +180,28 @@ async def test_add_group_member_rotates_epoch_and_broadcasts_events(monkeypatch)
     assert fake_manager.user_messages[0][0] == str(member_id)
     assert fake_manager.user_messages[0][1]["type"] == "group_created"
     assert fake_manager.user_messages[0][1]["group_name"] == "Ops"
+
+
+@pytest.mark.asyncio
+async def test_add_group_member_rejects_demoting_last_owner(monkeypatch):
+    async def fake_require_group_admin(_conn, _group_id, _user_id):
+        return None
+
+    monkeypatch.setattr(groups_router, "require_group_admin", fake_require_group_admin)
+
+    conn = make_conn()
+    conn.fetchval = AsyncMock(side_effect=["owner", 1])
+
+    with pytest.raises(HTTPException) as exc:
+        await groups_router.add_group_member(
+            uuid4(),
+            groups_router.GroupMemberAddRequest(user_id=uuid4(), role="member"),
+            conn=conn,
+            user=make_user(),
+        )
+
+    assert exc.value.status_code == 400
+    assert "last owner" in str(exc.value.detail)
 
 
 @pytest.mark.asyncio
