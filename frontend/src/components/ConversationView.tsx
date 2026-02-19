@@ -40,7 +40,7 @@ export function ConversationView({ conversationId }: Props) {
     if (user && conversation) {
       loadConversationMessages();
     }
-  }, [conversationId, user, conversation]);
+  }, [conversationId, user?.id, conversation?.kind, conversation?.participantId, conversation?.keyEpoch]);
 
   const loadConversationMessages = async () => {
     if (!user || !conversation) return;

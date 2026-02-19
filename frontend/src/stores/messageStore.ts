@@ -68,6 +68,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     set({ isLoading: true });
 
     try {
+      const existingMessages = get().messagesByConversation.get(conversationId) || [];
+      const existingById = new Map(existingMessages.map((message) => [message.id, message]));
+
       const stored = await loadMessages(conversationId, 100);
       const messages: Message[] = [];
 
@@ -84,7 +87,12 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             content: payload.content,
             timestamp: payload.timestamp,
             expiresAfterSeenSec: payload.expires_after_seen_sec,
-            seenByUser: {},
+            seenByUser: existingById.get(id)?.seenByUser || {},
+            deleteAfterSeenAt: existingById.get(id)?.deleteAfterSeenAt,
+            senderDeleteAfterSeenAt: existingById.get(id)?.senderDeleteAfterSeenAt,
+            seenCount: existingById.get(id)?.seenCount,
+            totalRecipients: existingById.get(id)?.totalRecipients,
+            allRecipientsSeen: existingById.get(id)?.allRecipientsSeen,
             status: 'sent'
           });
         } catch {

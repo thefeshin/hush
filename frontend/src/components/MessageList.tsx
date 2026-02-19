@@ -51,8 +51,9 @@ export function MessageList({ messages, currentUserId, onMessageVisible }: Props
           const element = entry.target as HTMLElement;
           const messageId = element.dataset.messageId;
           const isOwn = element.dataset.own === 'true';
+          const isAlreadySeen = element.dataset.seen === 'true';
 
-          if (!messageId || isOwn || seenReportedRef.current.has(messageId)) {
+          if (!messageId || isOwn || isAlreadySeen || seenReportedRef.current.has(messageId)) {
             continue;
           }
 
@@ -112,6 +113,7 @@ export function MessageList({ messages, currentUserId, onMessageVisible }: Props
             className={messageContainerClass}
             data-message-id={message.id}
             data-own={isOwn ? 'true' : 'false'}
+            data-seen={message.seenByUser?.[currentUserId] ? 'true' : 'false'}
           >
             {showSender && (
               <div className="mb-1 ml-2 text-caption text-text-secondary">{message.senderName}</div>
@@ -120,15 +122,6 @@ export function MessageList({ messages, currentUserId, onMessageVisible }: Props
               <div className="whitespace-pre-wrap break-words">{message.content}</div>
               <div className={metaClass}>
                 <span>{formatTime(message.timestamp)}</span>
-                {isOwn && message.seenByUser && Object.keys(message.seenByUser).length > 0 && (
-                  <span>
-                    {typeof message.totalRecipients === 'number' && message.totalRecipients > 1
-                      ? (message.allRecipientsSeen
-                        ? 'all seen'
-                        : `seen ${message.seenCount || 0}/${message.totalRecipients}`)
-                      : 'seen'}
-                  </span>
-                )}
                 {isOwn && message.senderDeleteAfterSeenAt && (
                   <span>
                     {Math.max(0, Math.ceil((message.senderDeleteAfterSeenAt - Date.now()) / 1000))}s
