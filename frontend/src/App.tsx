@@ -3,9 +3,9 @@
  * Handles multi-user authentication flow
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
-import { Toaster, toast } from 'react-hot-toast';
+import { ToastBar, Toaster, toast, type Toast } from 'react-hot-toast';
 import { CryptoProvider, useCrypto } from './crypto/CryptoContext';
 import { useAuthStore, User } from './stores/authStore';
 import { initDatabase } from './services/storage';
@@ -27,13 +27,13 @@ function showPinSetupReminder(onOpenSettings: () => void) {
   toast.custom((t) => (
     <div
       role="status"
-      className="flex max-w-[440px] items-center gap-3 rounded-[10px] border border-slate-700 bg-[#17212b] px-3.5 py-3 text-slate-50 shadow-[0_8px_20px_rgba(0,0,0,0.25)]"
+      className="flex w-full max-w-[440px] items-center gap-3 rounded-[10px] border border-slate-700 bg-[#17212b] px-3.5 py-3 text-slate-50 shadow-[0_8px_20px_rgba(0,0,0,0.25)]"
     >
-      <div className="text-body leading-[1.4]">
+      <div className="min-w-0 text-body leading-[1.4]">
         Set up a PIN to avoid entering your 12 words each time.
       </div>
       <button
-        className="cursor-pointer rounded-lg border border-zinc-600 bg-zinc-200 px-2.5 py-1.5 font-bold text-zinc-900 hover:bg-zinc-100"
+        className="shrink-0 whitespace-nowrap rounded-lg border border-zinc-600 bg-zinc-200 px-2.5 py-1.5 font-bold text-zinc-900 hover:bg-zinc-100"
         onClick={() => {
           toast.dismiss(t.id);
           onOpenSettings();
@@ -43,6 +43,55 @@ function showPinSetupReminder(onOpenSettings: () => void) {
       </button>
     </div>
   ), { duration: 12000 });
+}
+
+function SwipeToast({ toastItem, children }: { toastItem: Toast; children: React.ReactNode }) {
+  const [offsetX, setOffsetX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startXRef = useRef(0);
+  const draggingRef = useRef(false);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    startXRef.current = e.clientX - offsetX;
+    draggingRef.current = true;
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) {
+      return;
+    }
+    const next = e.clientX - startXRef.current;
+    setOffsetX(next);
+  };
+
+  const finishDrag = () => {
+    draggingRef.current = false;
+    setDragging(false);
+    if (Math.abs(offsetX) > 90) {
+      toast.dismiss(toastItem.id);
+      return;
+    }
+    setOffsetX(0);
+  };
+
+  return (
+    <div
+      className="touch-pan-y"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+      style={{
+        transform: `translateX(${offsetX}px)`,
+        opacity: Math.max(0.25, 1 - Math.abs(offsetX) / 180),
+        transition: dragging ? 'none' : 'transform 150ms ease, opacity 150ms ease',
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 function AppContent() {
@@ -159,7 +208,27 @@ function AppContent() {
 
   return (
     <div className="min-h-dvh bg-bg-primary text-body text-text-primary leading-relaxed">
-      <Toaster position="top-right" />
+      <Toaster
+        position="bottom-center"
+        containerStyle={{
+          bottom: 'calc(5.25rem + env(safe-area-inset-bottom))',
+          left: '0.75rem',
+          right: '0.75rem',
+          zIndex: 1200,
+        }}
+        toastOptions={{
+          style: {
+            maxWidth: 'min(440px, calc(100vw - 1.5rem))',
+            width: '100%',
+          },
+        }}
+      >
+        {(t) => (
+          <SwipeToast toastItem={t}>
+            <ToastBar toast={t} />
+          </SwipeToast>
+        )}
+      </Toaster>
       {/* PWA Banners */}
       <UpdateBanner />
 
