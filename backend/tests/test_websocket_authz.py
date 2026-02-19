@@ -297,7 +297,10 @@ async def test_handle_message_delivers_to_recipient_without_existing_subscriptio
     assert fake_manager.personal[0]["conversation_id"] == str(conversation_id)
     assert fake_manager.personal[0]["client_message_id"] == "client-123"
 
-    assert fake_manager.user_auto_subscriptions == [(str(recipient_id), str(conversation_id))]
+    assert fake_manager.user_auto_subscriptions == [
+        (str(sender_id), str(conversation_id)),
+        (str(recipient_id), str(conversation_id)),
+    ]
     assert fake_manager.user_deliveries == []
 
 
@@ -492,6 +495,11 @@ async def test_handle_message_seen_marks_seen_and_broadcasts(monkeypatch):
     assert payload["seen_count"] == 1
     assert payload["total_recipients"] == 1
     assert payload["all_recipients_seen"] is True
+    assert len(fake_manager.user_deliveries) == 1
+    delivered_user_id, delivered_payload = fake_manager.user_deliveries[0]
+    assert delivered_user_id == str(sender_id)
+    assert delivered_payload["type"] == "message_seen"
+    assert delivered_payload["message_id"] == str(message_id)
 
 
 @pytest.mark.asyncio

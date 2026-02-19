@@ -384,6 +384,11 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         await ws_manager.send_personal(websocket, build_error("message_persist_failed", "Failed to save message"))
         return
 
+    # Ensure sender sockets are subscribed so follow-up events (seen/deletes)
+    # are reliably delivered even in first-contact flows.
+    sender_user_id = str(websocket.state.user_id)
+    await ws_manager.subscribe_user_connections_to_conversation(sender_user_id, conversation_id)
+
     # Ensure recipient sockets are subscribed before broadcast so first-message
     # delivery happens via the same single broadcast path as normal messages.
     if recipient_uuid:
@@ -555,6 +560,23 @@ async def handle_message_seen(websocket: WebSocket, data: dict, pool):
 
             await ws_manager.broadcast_to_conversation(
                 str(conversation_uuid),
+                {
+                    "type": "message_seen",
+                    "message_id": str(message_uuid),
+                    "conversation_id": str(conversation_uuid),
+                    "seen_by": str(websocket.state.user_id),
+                    "seen_at": seen_at.isoformat(),
+                    "seen_count": int(aggregate["seen_count"]) if aggregate else 0,
+                    "total_recipients": int(aggregate["total_recipients"]) if aggregate else 0,
+                    "all_recipients_seen": bool(aggregate["all_recipients_seen"]) if aggregate else False,
+                    "sender_delete_after_seen_at": sender_delete_after_seen_at.isoformat() if sender_delete_after_seen_at else None,
+                },
+            )
+
+            # Also deliver directly to sender user sockets in case they are not
+            # currently conversation-subscribed (first-contact edge case).
+            await ws_manager.send_to_user(
+                str(message_row["sender_id"]),
                 {
                     "type": "message_seen",
                     "message_id": str(message_uuid),
