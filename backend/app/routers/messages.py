@@ -24,7 +24,9 @@ from app.utils.payload_validation import decode_base64_field
 router = APIRouter()
 
 
-async def initialize_message_user_state(conn, message_id: UUID, conversation_id: UUID, sender_id: UUID):
+async def initialize_message_user_state(
+    conn, message_id: UUID, conversation_id: UUID, sender_id: UUID
+):
     participant_ids = await conn.fetch(
         """
         SELECT user_id
@@ -85,7 +87,9 @@ async def ensure_direct_conversation(
     await require_conversation_participant(conn, conversation_id, sender_id)
 
 
-@router.post("/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_message(
     message: MessageCreate,
     conn=Depends(get_connection),
@@ -124,7 +128,9 @@ async def create_message(
         message.expires_after_seen_sec,
     )
 
-    await initialize_message_user_state(conn, row["id"], row["conversation_id"], user.user_id)
+    await initialize_message_user_state(
+        conn, row["id"], row["conversation_id"], user.user_id
+    )
 
     broadcast_msg = {
         "type": "message",
@@ -132,13 +138,17 @@ async def create_message(
         "conversation_id": str(row["conversation_id"]),
         "sender_id": str(row["sender_id"]),
         "group_epoch": row["group_epoch"],
-        "expires_after_seen_sec": row["expires_after_seen_sec"] if "expires_after_seen_sec" in row else None,
+        "expires_after_seen_sec": row["expires_after_seen_sec"]
+        if "expires_after_seen_sec" in row
+        else None,
         "ciphertext": base64.b64encode(row["ciphertext"]).decode("ascii"),
         "iv": base64.b64encode(row["iv"]).decode("ascii"),
         "created_at": row["created_at"].isoformat(),
     }
 
-    await ws_manager.broadcast_to_conversation(str(row["conversation_id"]), broadcast_msg)
+    await ws_manager.broadcast_to_conversation(
+        str(row["conversation_id"]), broadcast_msg
+    )
 
     if message.recipient_id:
         recipient_user_id = str(message.recipient_id)
@@ -153,7 +163,9 @@ async def create_message(
         conversation_id=row["conversation_id"],
         sender_id=row["sender_id"],
         group_epoch=row["group_epoch"],
-        expires_after_seen_sec=row["expires_after_seen_sec"] if "expires_after_seen_sec" in row else None,
+        expires_after_seen_sec=row["expires_after_seen_sec"]
+        if "expires_after_seen_sec" in row
+        else None,
         ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
         iv=base64.b64encode(row["iv"]).decode("ascii"),
         created_at=row["created_at"],
@@ -163,7 +175,9 @@ async def create_message(
 @router.get("/messages/{conversation_id}", response_model=List[MessageResponse])
 async def get_messages(
     conversation_id: UUID,
-    after: Optional[datetime] = Query(None, description="Get messages after this timestamp"),
+    after: Optional[datetime] = Query(
+        None, description="Get messages after this timestamp"
+    ),
     limit: int = Query(50, ge=1, le=200, description="Maximum messages to return"),
     conn=Depends(get_connection),
     user: AuthenticatedUser = Depends(get_current_user),

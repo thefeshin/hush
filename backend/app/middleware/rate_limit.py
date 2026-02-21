@@ -13,6 +13,7 @@ from threading import Lock
 @dataclass
 class RateLimitConfig:
     """Rate limit configuration"""
+
     requests_per_minute: int = 60
     burst_size: int = 10
 
@@ -47,8 +48,7 @@ class RateLimiter:
             time_passed = now - last_update
             tokens_per_second = self.config.requests_per_minute / 60.0
             tokens = min(
-                self.config.burst_size,
-                tokens + time_passed * tokens_per_second
+                self.config.burst_size, tokens + time_passed * tokens_per_second
             )
 
             if tokens >= 1:
@@ -65,7 +65,8 @@ class RateLimiter:
         with self._lock:
             now = time.time()
             to_remove = [
-                ip for ip, (last_update, _) in self._buckets.items()
+                ip
+                for ip, (last_update, _) in self._buckets.items()
                 if now - last_update > max_age_seconds
             ]
             for ip in to_remove:
@@ -78,8 +79,8 @@ class RateLimiter:
                 "tracked_ips": len(self._buckets),
                 "config": {
                     "requests_per_minute": self.config.requests_per_minute,
-                    "burst_size": self.config.burst_size
-                }
+                    "burst_size": self.config.burst_size,
+                },
             }
 
 
@@ -87,14 +88,14 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 # Stricter rate limiter for auth endpoints
-auth_rate_limiter = RateLimiter(RateLimitConfig(
-    requests_per_minute=10,  # Very limited auth attempts
-    burst_size=3
-))
+auth_rate_limiter = RateLimiter(
+    RateLimitConfig(requests_per_minute=10, burst_size=3)  # Very limited auth attempts
+)
 
 
 def log_rate_limited(ip: str):
     """Log when an IP is rate limited"""
     import logging
+
     logger = logging.getLogger("hush.security")
     logger.warning(f"Rate limited: {ip}")

@@ -30,9 +30,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://hush:hush@localhost:5432/hush"
 
     # Authentication
-    AUTH_HASH: str = ""         # SHA-256 hash of 12 words
-    KDF_SALT: str = ""          # Base64-encoded salt (sent to client)
-    JWT_SECRET: str = ""        # Secret for signing JWTs
+    AUTH_HASH: str = ""  # SHA-256 hash of 12 words
+    KDF_SALT: str = ""  # Base64-encoded salt (sent to client)
+    JWT_SECRET: str = ""  # Secret for signing JWTs
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
@@ -54,7 +54,9 @@ class Settings(BaseSettings):
     BACKEND_PORT: int = 8000
     FRONTEND_URL: str = "https://localhost"
     TRUST_PROXY_HEADERS: bool = False
-    TRUSTED_PROXY_CIDRS_RAW: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    TRUSTED_PROXY_CIDRS_RAW: str = (
+        "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    )
 
     @property
     def trusted_proxy_cidrs(self) -> list[str]:
@@ -87,7 +89,10 @@ def validate_security_settings(active_settings: Settings) -> None:
     if active_settings.MAX_AUTH_FAILURES < 1:
         errors.append("MAX_AUTH_FAILURES must be >= 1")
 
-    if active_settings.FAILURE_MODE == "ip_temp" and active_settings.IP_BLOCK_MINUTES < 1:
+    if (
+        active_settings.FAILURE_MODE == "ip_temp"
+        and active_settings.IP_BLOCK_MINUTES < 1
+    ):
         errors.append("IP_BLOCK_MINUTES must be >= 1 when FAILURE_MODE=ip_temp")
 
     if errors:

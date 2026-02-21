@@ -12,11 +12,14 @@ from app.security_limits import MAX_IV_B64_CHARS, MAX_MESSAGE_CIPHERTEXT_B64_CHA
 
 class MessageCreate(BaseModel):
     """Create a new message (encrypted content)"""
+
     conversation_id: UUID
     recipient_id: Optional[UUID] = None
     group_epoch: Optional[int] = Field(default=None, ge=1, le=1000000)
     expires_after_seen_sec: Optional[int] = Field(default=None, ge=15, le=60)
-    ciphertext: str = Field(..., min_length=4, max_length=MAX_MESSAGE_CIPHERTEXT_B64_CHARS)
+    ciphertext: str = Field(
+        ..., min_length=4, max_length=MAX_MESSAGE_CIPHERTEXT_B64_CHARS
+    )
     iv: str = Field(..., min_length=16, max_length=MAX_IV_B64_CHARS)
 
     @field_validator("expires_after_seen_sec")
@@ -31,6 +34,7 @@ class MessageCreate(BaseModel):
 
 class MessageResponse(BaseModel):
     """Message response (still encrypted)"""
+
     id: UUID
     conversation_id: UUID
     sender_id: UUID
@@ -49,6 +53,7 @@ class MessageResponse(BaseModel):
 
 class MessageQuery(BaseModel):
     """Query messages for a conversation"""
+
     conversation_id: UUID
-    after: Optional[datetime] = None    # For pagination
+    after: Optional[datetime] = None  # For pagination
     limit: int = Field(default=50, le=200)

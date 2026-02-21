@@ -26,7 +26,7 @@ async def db_health_check(conn=Depends(get_connection)):
         logger.warning("Database health check failed", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "unhealthy", "database": "unavailable"}
+            detail={"status": "unhealthy", "database": "unavailable"},
         )
 
     return {"status": "healthy", "database": "connected"}

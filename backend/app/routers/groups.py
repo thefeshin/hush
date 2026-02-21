@@ -24,7 +24,9 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.post("/groups", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/groups", response_model=GroupResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_group(
     payload: GroupCreateRequest,
     conn=Depends(get_connection),
@@ -85,7 +87,9 @@ async def create_group(
                 payload.encrypted_key_envelope,
             )
 
-        member_ids = [member_id for member_id in payload.member_ids if member_id != user.user_id]
+        member_ids = [
+            member_id for member_id in payload.member_ids if member_id != user.user_id
+        ]
         for member_id in member_ids:
             await conn.execute(
                 """
@@ -125,14 +129,23 @@ async def create_group(
     }
     await ws_manager.broadcast_to_conversation(str(conversation_id), group_event)
 
-    member_ids = [member_id for member_id in payload.member_ids if member_id != user.user_id]
+    member_ids = [
+        member_id for member_id in payload.member_ids if member_id != user.user_id
+    ]
     for member_id in member_ids:
         member_user_id = str(member_id)
-        await ws_manager.subscribe_user_connections_to_conversation(member_user_id, str(conversation_id))
+        await ws_manager.subscribe_user_connections_to_conversation(
+            member_user_id, str(conversation_id)
+        )
         await ws_manager.send_to_user(member_user_id, group_event)
 
     increment_counter("group_created_total")
-    logger.info("group_created group_id=%s created_by=%s members=%s", conversation_id, user.user_id, len(member_ids) + 1)
+    logger.info(
+        "group_created group_id=%s created_by=%s members=%s",
+        conversation_id,
+        user.user_id,
+        len(member_ids) + 1,
+    )
 
     return GroupResponse(
         id=row["id"],
@@ -239,7 +252,9 @@ async def add_group_member(
             "key_epoch": int(new_epoch),
         },
     )
-    await ws_manager.subscribe_user_connections_to_conversation(str(payload.user_id), str(group_id))
+    await ws_manager.subscribe_user_connections_to_conversation(
+        str(payload.user_id), str(group_id)
+    )
     await ws_manager.send_to_user(
         str(payload.user_id),
         {
@@ -271,7 +286,9 @@ async def add_group_member(
     return await get_group_state(group_id, conn, user)
 
 
-@router.delete("/groups/{group_id}/members/{member_id}", response_model=GroupStateResponse)
+@router.delete(
+    "/groups/{group_id}/members/{member_id}", response_model=GroupStateResponse
+)
 async def remove_group_member(
     group_id: UUID,
     member_id: UUID,
@@ -368,7 +385,9 @@ async def get_group_state(
         group_id,
     )
     if not group_row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
+        )
 
     member_rows = await conn.fetch(
         """

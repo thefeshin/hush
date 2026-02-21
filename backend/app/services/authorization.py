@@ -7,7 +7,9 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 
-async def is_conversation_participant(conn, conversation_id: UUID, user_id: UUID) -> bool:
+async def is_conversation_participant(
+    conn, conversation_id: UUID, user_id: UUID
+) -> bool:
     return await conn.fetchval(
         """
         SELECT EXISTS(
@@ -21,7 +23,9 @@ async def is_conversation_participant(conn, conversation_id: UUID, user_id: UUID
     )
 
 
-async def require_conversation_participant(conn, conversation_id: UUID, user_id: UUID) -> None:
+async def require_conversation_participant(
+    conn, conversation_id: UUID, user_id: UUID
+) -> None:
     conversation_exists = await conn.fetchval(
         "SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1)",
         conversation_id,

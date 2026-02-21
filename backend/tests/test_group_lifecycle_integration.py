@@ -65,7 +65,9 @@ class StatefulConn:
             else:
                 role = args[2]
             existing = self.group_members.get((group_id, user_id))
-            joined_at = existing["joined_at"] if existing else datetime.now(timezone.utc)
+            joined_at = (
+                existing["joined_at"] if existing else datetime.now(timezone.utc)
+            )
             self.group_members[(group_id, user_id)] = {
                 "role": role,
                 "joined_at": joined_at,
@@ -79,10 +81,15 @@ class StatefulConn:
                 epoch = 1
             else:
                 group_id, user_id, epoch, encrypted_key_blob = args
-            self.group_key_envelopes[(group_id, user_id, int(epoch))] = encrypted_key_blob
+            self.group_key_envelopes[
+                (group_id, user_id, int(epoch))
+            ] = encrypted_key_blob
             return "INSERT 0 1"
 
-        if "update group_members" in normalized and "set removed_at = now()" in normalized:
+        if (
+            "update group_members" in normalized
+            and "set removed_at = now()" in normalized
+        ):
             group_id, user_id = args
             key = (group_id, user_id)
             if key in self.group_members:
@@ -123,9 +130,19 @@ class StatefulConn:
                 "key_epoch": group["key_epoch"],
             }
 
-        if "insert into messages" in normalized and "returning id, created_at, group_epoch" in normalized:
+        if (
+            "insert into messages" in normalized
+            and "returning id, created_at, group_epoch" in normalized
+        ):
             if len(args) == 6:
-                conversation_id, sender_id, ciphertext, iv, group_epoch, _expires_after_seen_sec = args
+                (
+                    conversation_id,
+                    sender_id,
+                    ciphertext,
+                    iv,
+                    group_epoch,
+                    _expires_after_seen_sec,
+                ) = args
             else:
                 conversation_id, sender_id, ciphertext, iv, group_epoch = args
             message_id = uuid4()
@@ -210,7 +227,9 @@ class StatefulConn:
             owners = [
                 1
                 for (row_group_id, _user_id), member in self.group_members.items()
-                if row_group_id == group_id and member["role"] == "owner" and member["removed_at"] is None
+                if row_group_id == group_id
+                and member["role"] == "owner"
+                and member["removed_at"] is None
             ]
             return len(owners)
 
@@ -267,7 +286,9 @@ class FakeWsManager:
     async def broadcast_to_conversation(self, conversation_id, message):
         self.broadcasts.append((conversation_id, message))
 
-    async def subscribe_user_connections_to_conversation(self, user_id, conversation_id):
+    async def subscribe_user_connections_to_conversation(
+        self, user_id, conversation_id
+    ):
         self.user_auto_subscriptions.append((user_id, conversation_id))
 
     async def send_to_user(self, user_id, message):
@@ -335,7 +356,8 @@ async def test_group_lifecycle_message_epoch_enforcement(monkeypatch):
         pool,
     )
     assert any(
-        msg.get("type") == "message_sent" and msg.get("client_message_id") == "epoch-2-ok"
+        msg.get("type") == "message_sent"
+        and msg.get("client_message_id") == "epoch-2-ok"
         for msg in ws_manager.personal
     )
 
@@ -359,7 +381,8 @@ async def test_group_lifecycle_message_epoch_enforcement(monkeypatch):
         pool,
     )
     assert any(
-        msg.get("type") == "error" and msg.get("code") == "stale_group_epoch"
+        msg.get("type") == "error"
+        and msg.get("code") == "stale_group_epoch"
         and msg.get("client_message_id") == "epoch-2-stale"
         for msg in ws_manager.personal
     )
@@ -376,7 +399,8 @@ async def test_group_lifecycle_message_epoch_enforcement(monkeypatch):
         pool,
     )
     assert any(
-        msg.get("type") == "message_sent" and msg.get("client_message_id") == "epoch-3-ok"
+        msg.get("type") == "message_sent"
+        and msg.get("client_message_id") == "epoch-3-ok"
         for msg in ws_manager.personal
     )
 

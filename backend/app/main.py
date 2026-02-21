@@ -46,10 +46,10 @@ def create_app() -> FastAPI:
         title="HUSH",
         description="Zero-Knowledge Encrypted Chat Vault",
         version="1.0.0",
-        docs_url=None,      # Disable Swagger in production
-        redoc_url=None,     # Disable ReDoc in production
-        openapi_url=None,   # Disable OpenAPI schema
-        lifespan=lifespan
+        docs_url=None,  # Disable Swagger in production
+        redoc_url=None,  # Disable ReDoc in production
+        openapi_url=None,  # Disable OpenAPI schema
+        lifespan=lifespan,
     )
 
     # Security middleware (IP blocking, rate limiting)

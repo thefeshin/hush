@@ -56,7 +56,9 @@ class FakeWsManager:
 
 
 @pytest.mark.asyncio
-async def test_process_due_message_expiry_marks_recipient_and_sender_and_hard_deletes(monkeypatch):
+async def test_process_due_message_expiry_marks_recipient_and_sender_and_hard_deletes(
+    monkeypatch,
+):
     recipient_user = uuid4()
     sender_user = uuid4()
     conversation_id = uuid4()
@@ -106,7 +108,9 @@ async def test_process_due_message_expiry_marks_recipient_and_sender_and_hard_de
     assert counters["messages_deleted_hard_total"] == 1
 
     sender_query = "\n".join(conn.fetch_calls)
-    assert "mus.is_sender = TRUE" in sender_query or "mus.is_sender = true" in sender_query
+    assert (
+        "mus.is_sender = TRUE" in sender_query or "mus.is_sender = true" in sender_query
+    )
 
 
 @pytest.mark.asyncio

@@ -28,7 +28,9 @@ class FakeWsManager:
     async def broadcast_to_conversation(self, conversation_id, message):
         self.broadcasts.append((conversation_id, message))
 
-    async def subscribe_user_connections_to_conversation(self, user_id, conversation_id):
+    async def subscribe_user_connections_to_conversation(
+        self, user_id, conversation_id
+    ):
         self.user_subscriptions.append((user_id, conversation_id))
 
     async def send_to_user(self, user_id, message):
@@ -50,7 +52,9 @@ def make_user(user_id=None):
 
 
 @pytest.mark.asyncio
-async def test_create_group_inserts_conversation_and_members_and_broadcasts(monkeypatch):
+async def test_create_group_inserts_conversation_and_members_and_broadcasts(
+    monkeypatch,
+):
     fake_manager = FakeWsManager()
     monkeypatch.setattr(groups_router, "ws_manager", fake_manager)
 
@@ -62,12 +66,14 @@ async def test_create_group_inserts_conversation_and_members_and_broadcasts(monk
     monkeypatch.setattr(groups_router, "uuid4", lambda: conversation_id)
 
     conn = make_conn()
-    conn.fetchrow = AsyncMock(return_value={
-        "id": conversation_id,
-        "created_at": created_at,
-        "group_name": "Ops Team",
-        "key_epoch": 1,
-    })
+    conn.fetchrow = AsyncMock(
+        return_value={
+            "id": conversation_id,
+            "created_at": created_at,
+            "group_name": "Ops Team",
+            "key_epoch": 1,
+        }
+    )
 
     payload = groups_router.GroupCreateRequest(
         name=" Ops Team ",
@@ -97,7 +103,9 @@ async def test_create_group_inserts_conversation_and_members_and_broadcasts(monk
     assert (str(member_a), str(conversation_id)) in fake_manager.user_subscriptions
     assert (str(member_b), str(conversation_id)) in fake_manager.user_subscriptions
     assert len(fake_manager.user_messages) == 2
-    assert all(message["type"] == "group_created" for _, message in fake_manager.user_messages)
+    assert all(
+        message["type"] == "group_created" for _, message in fake_manager.user_messages
+    )
 
 
 @pytest.mark.asyncio
@@ -109,12 +117,14 @@ async def test_create_group_does_not_duplicate_creator_member_row(monkeypatch):
     monkeypatch.setattr(groups_router, "uuid4", lambda: conversation_id)
 
     conn = make_conn()
-    conn.fetchrow = AsyncMock(return_value={
-        "id": conversation_id,
-        "created_at": datetime.now(timezone.utc),
-        "group_name": "Core",
-        "key_epoch": 1,
-    })
+    conn.fetchrow = AsyncMock(
+        return_value={
+            "id": conversation_id,
+            "created_at": datetime.now(timezone.utc),
+            "group_name": "Core",
+            "key_epoch": 1,
+        }
+    )
 
     user = make_user()
     payload = groups_router.GroupCreateRequest(name="Core", member_ids=[user.user_id])
@@ -122,7 +132,8 @@ async def test_create_group_does_not_duplicate_creator_member_row(monkeypatch):
     await groups_router.create_group(payload, conn=conn, user=user)
 
     participant_inserts = [
-        call.args for call in conn.execute.call_args_list
+        call.args
+        for call in conn.execute.call_args_list
         if "INSERT INTO conversation_participants" in call.args[0]
     ]
     # One participant insert for creator only; no duplicate pass through member list.
@@ -140,12 +151,14 @@ async def test_create_group_allows_owner_only_group(monkeypatch):
     monkeypatch.setattr(groups_router, "uuid4", lambda: conversation_id)
 
     conn = make_conn()
-    conn.fetchrow = AsyncMock(return_value={
-        "id": conversation_id,
-        "created_at": created_at,
-        "group_name": "Solo Group",
-        "key_epoch": 1,
-    })
+    conn.fetchrow = AsyncMock(
+        return_value={
+            "id": conversation_id,
+            "created_at": created_at,
+            "group_name": "Solo Group",
+            "key_epoch": 1,
+        }
+    )
 
     user = make_user()
     payload = groups_router.GroupCreateRequest(name="Solo Group", member_ids=[])
@@ -157,7 +170,8 @@ async def test_create_group_allows_owner_only_group(monkeypatch):
     assert response.key_epoch == 1
 
     owner_member_inserts = [
-        call.args for call in conn.execute.call_args_list
+        call.args
+        for call in conn.execute.call_args_list
         if "INSERT INTO group_members" in call.args[0] and "'owner'" in call.args[0]
     ]
     assert len(owner_member_inserts) == 1
@@ -203,7 +217,9 @@ async def test_add_group_member_rotates_epoch_and_broadcasts_events(monkeypatch)
         encrypted_key_envelope="member-envelope",
     )
 
-    result = await groups_router.add_group_member(group_id, payload, conn=conn, user=user)
+    result = await groups_router.add_group_member(
+        group_id, payload, conn=conn, user=user
+    )
 
     assert isinstance(result, GroupStateResponse)
     assert result.key_epoch == 5
@@ -256,7 +272,9 @@ async def test_remove_group_member_rejects_last_owner(monkeypatch):
     conn.fetchval = AsyncMock(return_value=1)
 
     with pytest.raises(HTTPException) as exc:
-        await groups_router.remove_group_member(group_id, user.user_id, conn=conn, user=user)
+        await groups_router.remove_group_member(
+            group_id, user.user_id, conn=conn, user=user
+        )
 
     assert exc.value.status_code == 400
     assert "last owner" in str(exc.value.detail)
@@ -291,7 +309,9 @@ async def test_remove_group_member_rotates_epoch_and_broadcasts(monkeypatch):
     conn = make_conn()
     conn.fetchval = AsyncMock(return_value=9)
 
-    result = await groups_router.remove_group_member(group_id, member_id, conn=conn, user=user)
+    result = await groups_router.remove_group_member(
+        group_id, member_id, conn=conn, user=user
+    )
 
     assert result.key_epoch == 9
     assert len(fake_manager.broadcasts) == 2
@@ -305,7 +325,9 @@ async def test_get_group_state_requires_membership(monkeypatch):
     async def fake_require_group_member(_conn, _group_id, _user_id):
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    monkeypatch.setattr(groups_router, "require_group_member", fake_require_group_member)
+    monkeypatch.setattr(
+        groups_router, "require_group_member", fake_require_group_member
+    )
 
     conn = make_conn()
     user = make_user()
@@ -321,25 +343,31 @@ async def test_get_group_state_returns_envelope_for_current_epoch(monkeypatch):
     async def fake_require_group_member(_conn, _group_id, _user_id):
         return None
 
-    monkeypatch.setattr(groups_router, "require_group_member", fake_require_group_member)
+    monkeypatch.setattr(
+        groups_router, "require_group_member", fake_require_group_member
+    )
 
     group_id = uuid4()
     user = make_user()
 
     conn = make_conn()
-    conn.fetchrow = AsyncMock(return_value={
-        "id": group_id,
-        "group_name": "Platform",
-        "created_by": user.user_id,
-        "key_epoch": 4,
-    })
-    conn.fetch = AsyncMock(return_value=[
-        {
-            "user_id": user.user_id,
-            "role": "owner",
-            "joined_at": datetime.now(timezone.utc),
-        },
-    ])
+    conn.fetchrow = AsyncMock(
+        return_value={
+            "id": group_id,
+            "group_name": "Platform",
+            "created_by": user.user_id,
+            "key_epoch": 4,
+        }
+    )
+    conn.fetch = AsyncMock(
+        return_value=[
+            {
+                "user_id": user.user_id,
+                "role": "owner",
+                "joined_at": datetime.now(timezone.utc),
+            },
+        ]
+    )
     conn.fetchval = AsyncMock(return_value="encrypted-envelope-v4")
 
     response = await groups_router.get_group_state(group_id, conn=conn, user=user)

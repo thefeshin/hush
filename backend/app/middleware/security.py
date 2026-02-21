@@ -41,7 +41,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             log_rate_limited(client_ip)
             return JSONResponse(
                 status_code=429,
-                content={"error": "rate_limited", "message": "Too many requests"}
+                content={"error": "rate_limited", "message": "Too many requests"},
             )
 
         # Check IP block
@@ -53,7 +53,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 if blocked:
                     return JSONResponse(
                         status_code=403,
-                        content={"error": "ip_blocked", "message": "Access denied"}
+                        content={"error": "ip_blocked", "message": "Access denied"},
                     )
 
                 # Periodically clean up expired blocks
@@ -61,7 +61,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         except RuntimeError:
             # Database not initialized yet
-            logger.debug("Security middleware skipped IP checks: database not initialized")
+            logger.debug(
+                "Security middleware skipped IP checks: database not initialized"
+            )
         except Exception:
             # Fail open, but keep operators informed.
             logger.exception("Security middleware failed during request checks")
@@ -71,9 +73,12 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
     async def _check_ip_blocked(self, conn, ip: str) -> bool:
         """Check if IP is blocked"""
-        row = await conn.fetchrow("""
+        row = await conn.fetchrow(
+            """
             SELECT expires_at FROM blocked_ips WHERE ip_address = $1
-        """, ip)
+        """,
+            ip,
+        )
 
         if row is None:
             return False
@@ -95,11 +100,14 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         """Clean up expired IP blocks (runs periodically)"""
         # Only run cleanup occasionally to avoid overhead
         import random
+
         if random.random() < 0.01:  # 1% chance per request
-            await conn.execute("""
+            await conn.execute(
+                """
                 DELETE FROM blocked_ips
                 WHERE expires_at IS NOT NULL AND expires_at < NOW()
-            """)
+            """
+            )
 
     def _add_security_headers(self, response: Response) -> Response:
         """Add security headers to response"""

@@ -13,7 +13,14 @@ from app.security_limits import MAX_MESSAGE_CIPHERTEXT_BYTES
 
 
 class FakeConnection:
-    def __init__(self, *, fetchval_side_effect=None, rows=None, fetchrow_value=None, fetchrow_side_effect=None):
+    def __init__(
+        self,
+        *,
+        fetchval_side_effect=None,
+        rows=None,
+        fetchrow_value=None,
+        fetchrow_side_effect=None
+    ):
         self._fetchval_side_effect = list(fetchval_side_effect or [])
         self._rows = rows or []
         self._fetchrow_value = fetchrow_value
@@ -94,7 +101,9 @@ class FakeWsManager:
     async def broadcast_to_conversation(self, conversation_id, message):
         self.broadcasts.append((conversation_id, message))
 
-    async def subscribe_user_connections_to_conversation(self, user_id, conversation_id):
+    async def subscribe_user_connections_to_conversation(
+        self, user_id, conversation_id
+    ):
         self.user_auto_subscriptions.append((user_id, conversation_id))
 
     async def send_to_user(self, user_id, message):
@@ -152,13 +161,18 @@ async def test_handle_subscribe_user_uses_authenticated_user_id(monkeypatch):
 
     assert conn.fetch_args == (authenticated_user_id,)
     assert len(fake_manager.subscribed) == 2
-    assert fake_manager.personal[-1] == {"type": "user_subscribed", "conversation_count": 2}
+    assert fake_manager.personal[-1] == {
+        "type": "user_subscribed",
+        "conversation_count": 2,
+    }
 
 
 @pytest.mark.asyncio
 async def test_handle_subscribe_rejects_when_subscription_limit_reached(monkeypatch):
     fake_manager = FakeWsManager()
-    fake_manager.forced_subscription_count = ws_router.MAX_WS_SUBSCRIPTIONS_PER_CONNECTION
+    fake_manager.forced_subscription_count = (
+        ws_router.MAX_WS_SUBSCRIPTIONS_PER_CONNECTION
+    )
     monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
 
     conn = FakeConnection(fetchval_side_effect=[True, True])
@@ -171,7 +185,10 @@ async def test_handle_subscribe_rejects_when_subscription_limit_reached(monkeypa
         pool,
     )
 
-    assert fake_manager.personal[-1] == {"type": "error", "message": "subscription_limit_reached"}
+    assert fake_manager.personal[-1] == {
+        "type": "error",
+        "message": "subscription_limit_reached",
+    }
     assert not fake_manager.subscribed
 
 
@@ -250,7 +267,9 @@ async def test_handle_message_rejects_oversized_ciphertext(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_handle_message_delivers_to_recipient_without_existing_subscription(monkeypatch):
+async def test_handle_message_delivers_to_recipient_without_existing_subscription(
+    monkeypatch,
+):
     fake_manager = FakeWsManager()
     monkeypatch.setattr(ws_router, "ws_manager", fake_manager)
 
@@ -364,7 +383,9 @@ async def test_create_message_rest_delivers_realtime_to_recipient(monkeypatch):
     assert broadcast_payload["ciphertext"] == "Zm9v"
     assert broadcast_payload["iv"] == "MTIzNDU2Nzg5MDEy"
 
-    assert fake_manager.user_auto_subscriptions == [(str(recipient_id), str(conversation_id))]
+    assert fake_manager.user_auto_subscriptions == [
+        (str(recipient_id), str(conversation_id))
+    ]
     assert len(fake_manager.user_deliveries) == 1
     delivered_user_id, delivered_payload = fake_manager.user_deliveries[0]
     assert delivered_user_id == str(recipient_id)

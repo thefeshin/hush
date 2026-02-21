@@ -26,8 +26,8 @@ def secure_hash(data: str) -> str:
     Compute SHA-256 hash of data
     Returns base64-encoded hash
     """
-    hash_bytes = hashlib.sha256(data.encode('utf-8')).digest()
-    return base64.b64encode(hash_bytes).decode('ascii')
+    hash_bytes = hashlib.sha256(data.encode("utf-8")).digest()
+    return base64.b64encode(hash_bytes).decode("ascii")
 
 
 def normalize_words(words: str) -> str:
@@ -38,7 +38,7 @@ def normalize_words(words: str) -> str:
     - single spaces between words
     """
     word_list = words.lower().split()
-    return ' '.join(word.strip() for word in word_list)
+    return " ".join(word.strip() for word in word_list)
 
 
 def hash_words(words: str) -> str:
