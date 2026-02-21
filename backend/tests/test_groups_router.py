@@ -131,6 +131,44 @@ async def test_create_group_does_not_duplicate_creator_member_row(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_create_group_allows_owner_only_group(monkeypatch):
+    fake_manager = FakeWsManager()
+    monkeypatch.setattr(groups_router, "ws_manager", fake_manager)
+
+    conversation_id = uuid4()
+    created_at = datetime.now(timezone.utc)
+    monkeypatch.setattr(groups_router, "uuid4", lambda: conversation_id)
+
+    conn = make_conn()
+    conn.fetchrow = AsyncMock(return_value={
+        "id": conversation_id,
+        "created_at": created_at,
+        "group_name": "Solo Group",
+        "key_epoch": 1,
+    })
+
+    user = make_user()
+    payload = groups_router.GroupCreateRequest(name="Solo Group", member_ids=[])
+
+    response = await groups_router.create_group(payload, conn=conn, user=user)
+
+    assert str(response.id) == str(conversation_id)
+    assert response.name == "Solo Group"
+    assert response.key_epoch == 1
+
+    owner_member_inserts = [
+        call.args for call in conn.execute.call_args_list
+        if "INSERT INTO group_members" in call.args[0] and "'owner'" in call.args[0]
+    ]
+    assert len(owner_member_inserts) == 1
+    assert owner_member_inserts[0][1] == conversation_id
+    assert owner_member_inserts[0][2] == user.user_id
+
+    assert len(fake_manager.user_subscriptions) == 0
+    assert len(fake_manager.user_messages) == 0
+
+
+@pytest.mark.asyncio
 async def test_add_group_member_rotates_epoch_and_broadcasts_events(monkeypatch):
     fake_manager = FakeWsManager()
     monkeypatch.setattr(groups_router, "ws_manager", fake_manager)
