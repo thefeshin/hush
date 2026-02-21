@@ -47,6 +47,7 @@ export interface MessagePayload {
   sender_name: string;
   content: string;
   timestamp: number;
+  expires_after_seen_sec?: 15 | 30 | 60;
   conversation_kind?: 'direct' | 'group';
   group_id?: string;
   group_epoch?: number;

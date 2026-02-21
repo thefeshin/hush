@@ -8,6 +8,7 @@ import { useAuthStore } from "../stores/authStore";
 import { useConversationStore } from "../stores/conversationStore";
 import { useMessageStore } from "../stores/messageStore";
 import { useCrypto } from "../crypto/CryptoContext";
+import { useWebSocket } from '../hooks/useWebSocket';
 import { getSyncService } from "../services/sync";
 import { ChevronLeft, Users } from 'lucide-react';
 import { useConversationSubscription } from "../hooks/useConversationSubscription";
@@ -25,6 +26,7 @@ export function ConversationView({ conversationId }: Props) {
   const { getConversation, setActiveConversation } = useConversationStore();
   const { loadMessagesForConversation, getMessages } = useMessageStore();
   const { getConversationKey, getGroupKey, decryptMessage } = useCrypto();
+  const { sendMessageSeen } = useWebSocket();
   const navigate = useNavigate();
 
   const conversation = getConversation(conversationId);
@@ -38,7 +40,7 @@ export function ConversationView({ conversationId }: Props) {
     if (user && conversation) {
       loadConversationMessages();
     }
-  }, [conversationId, user, conversation]);
+  }, [conversationId, user?.id, conversation?.kind, conversation?.participantId, conversation?.keyEpoch]);
 
   const loadConversationMessages = async () => {
     if (!user || !conversation) return;
@@ -96,7 +98,11 @@ export function ConversationView({ conversationId }: Props) {
         )}
       </div>
 
-      <MessageList messages={messages} currentUserId={user?.id || ""} />
+      <MessageList
+        messages={messages}
+        currentUserId={user?.id || ""}
+        onMessageVisible={(messageId) => sendMessageSeen(conversationId, messageId)}
+      />
 
       <MessageComposer
         conversationId={conversationId}

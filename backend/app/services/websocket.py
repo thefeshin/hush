@@ -17,6 +17,7 @@ from starlette.websockets import WebSocketState
 @dataclass
 class Connection:
     """Represents an active WebSocket connection"""
+
     websocket: WebSocket
     connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     subscribed_conversations: Set[str] = field(default_factory=set)
@@ -75,12 +76,16 @@ class WebSocketManager:
                 # Remove from all conversation subscriptions
                 for conversation_id in connection.subscribed_conversations:
                     if conversation_id in self._conversation_subscriptions:
-                        self._conversation_subscriptions[conversation_id].discard(websocket)
+                        self._conversation_subscriptions[conversation_id].discard(
+                            websocket
+                        )
                         # Clean up empty sets
                         if not self._conversation_subscriptions[conversation_id]:
                             del self._conversation_subscriptions[conversation_id]
 
-    async def subscribe_to_conversation(self, websocket: WebSocket, conversation_id: str):
+    async def subscribe_to_conversation(
+        self, websocket: WebSocket, conversation_id: str
+    ):
         """Subscribe a connection to a conversation"""
         async with self._lock:
             connection = self._connections.get(websocket)
@@ -94,7 +99,9 @@ class WebSocketManager:
                 self._conversation_subscriptions[conversation_id] = set()
             self._conversation_subscriptions[conversation_id].add(websocket)
 
-    async def unsubscribe_from_conversation(self, websocket: WebSocket, conversation_id: str):
+    async def unsubscribe_from_conversation(
+        self, websocket: WebSocket, conversation_id: str
+    ):
         """Unsubscribe a connection from a conversation"""
         async with self._lock:
             connection = self._connections.get(websocket)
@@ -115,7 +122,9 @@ class WebSocketManager:
         Message is sent as-is (encrypted blob from client)
         """
         async with self._lock:
-            subscribers = self._conversation_subscriptions.get(conversation_id, set()).copy()
+            subscribers = self._conversation_subscriptions.get(
+                conversation_id, set()
+            ).copy()
 
         # Send to all subscribers (outside lock)
         dead_connections = []
@@ -156,7 +165,9 @@ class WebSocketManager:
         for ws in dead_connections:
             await self.disconnect(ws)
 
-    async def subscribe_user_connections_to_conversation(self, user_id: str, conversation_id: str):
+    async def subscribe_user_connections_to_conversation(
+        self, user_id: str, conversation_id: str
+    ):
         """Subscribe all active sockets for a user to a conversation."""
         async with self._lock:
             sockets = self._user_connections.get(user_id, set()).copy()
@@ -171,7 +182,9 @@ class WebSocketManager:
             if connection:
                 connection.last_activity = datetime.now(timezone.utc)
 
-    async def is_subscribed_to_conversation(self, websocket: WebSocket, conversation_id: str) -> bool:
+    async def is_subscribed_to_conversation(
+        self, websocket: WebSocket, conversation_id: str
+    ) -> bool:
         """Check whether a connection is already subscribed to a conversation."""
         async with self._lock:
             connection = self._connections.get(websocket)
@@ -207,7 +220,10 @@ class WebSocketManager:
             if not connection:
                 return False
 
-            while connection.message_timestamps and connection.message_timestamps[0] < cutoff:
+            while (
+                connection.message_timestamps
+                and connection.message_timestamps[0] < cutoff
+            ):
                 connection.message_timestamps.popleft()
 
             if len(connection.message_timestamps) >= max_messages:
@@ -235,7 +251,7 @@ class WebSocketManager:
         return {
             "total_connections": self.connection_count,
             "conversations_with_subscribers": len(self._conversation_subscriptions),
-            "subscription_counts": self.conversation_subscription_counts
+            "subscription_counts": self.conversation_subscription_counts,
         }
 
 

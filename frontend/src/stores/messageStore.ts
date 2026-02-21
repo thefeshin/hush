@@ -13,6 +13,13 @@ interface Message {
   senderName: string;
   content: string;
   timestamp: number;
+  expiresAfterSeenSec?: 15 | 30 | 60;
+  seenByUser?: Record<string, number>;
+  deleteAfterSeenAt?: number;
+  senderDeleteAfterSeenAt?: number;
+  seenCount?: number;
+  totalRecipients?: number;
+  allRecipientsSeen?: boolean;
   status: 'sending' | 'sent' | 'failed';
 }
 
@@ -30,10 +37,21 @@ interface MessageState {
     conversationId: string,
     content: string,
     senderId: string,
-    senderName: string
+    senderName: string,
+    expiresAfterSeenSec?: 15 | 30 | 60,
   ) => string;
   markMessageSent: (tempId: string, realId: string) => void;
   markMessageFailed: (tempId: string) => void;
+  markMessageSeen: (
+    messageId: string,
+    seenByUserId: string,
+    seenAt: number,
+    seenCount?: number,
+    totalRecipients?: number,
+    allRecipientsSeen?: boolean,
+    senderDeleteAfterSeenAt?: number,
+  ) => void;
+  removeMessage: (messageId: string) => void;
   getMessages: (conversationId: string) => Message[];
 }
 
@@ -50,6 +68,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     set({ isLoading: true });
 
     try {
+      const existingMessages = get().messagesByConversation.get(conversationId) || [];
+      const existingById = new Map(existingMessages.map((message) => [message.id, message]));
+
       const stored = await loadMessages(conversationId, 100);
       const messages: Message[] = [];
 
@@ -65,6 +86,13 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             senderName: payload.sender_name,
             content: payload.content,
             timestamp: payload.timestamp,
+            expiresAfterSeenSec: payload.expires_after_seen_sec,
+            seenByUser: existingById.get(id)?.seenByUser || {},
+            deleteAfterSeenAt: existingById.get(id)?.deleteAfterSeenAt,
+            senderDeleteAfterSeenAt: existingById.get(id)?.senderDeleteAfterSeenAt,
+            seenCount: existingById.get(id)?.seenCount,
+            totalRecipients: existingById.get(id)?.totalRecipients,
+            allRecipientsSeen: existingById.get(id)?.allRecipientsSeen,
             status: 'sent'
           });
         } catch {
@@ -98,7 +126,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     });
   },
 
-  addPendingMessage: (conversationId, content, senderId, senderName) => {
+  addPendingMessage: (conversationId, content, senderId, senderName, expiresAfterSeenSec) => {
     const tempId = generateTempId();
     const message: Message = {
       id: tempId,
@@ -107,6 +135,8 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       senderName,
       content,
       timestamp: Date.now(),
+      expiresAfterSeenSec,
+      seenByUser: {},
       status: 'sending'
     };
 
@@ -158,6 +188,61 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         newMap.set(conversationId, updated);
       }
 
+      return { messagesByConversation: newMap };
+    });
+  },
+
+  markMessageSeen: (messageId, seenByUserId, seenAt, seenCount, totalRecipients, allRecipientsSeen, senderDeleteAfterSeenAt) => {
+    set(state => {
+      const newMap = new Map(state.messagesByConversation);
+
+      for (const [conversationId, messages] of newMap) {
+        let changed = false;
+        const updated = messages.map((message) => {
+          if (message.id !== messageId) {
+            return message;
+          }
+          const seenByUser = { ...(message.seenByUser || {}) };
+          if (seenByUser[seenByUserId]) {
+            return message;
+          }
+          seenByUser[seenByUserId] = seenAt;
+          changed = true;
+
+          let deleteAfterSeenAt = message.deleteAfterSeenAt;
+          if (message.expiresAfterSeenSec && message.senderId !== seenByUserId && !deleteAfterSeenAt) {
+            deleteAfterSeenAt = seenAt + (message.expiresAfterSeenSec * 1000);
+          }
+
+          return {
+            ...message,
+            seenByUser,
+            deleteAfterSeenAt,
+            seenCount: typeof seenCount === 'number' ? seenCount : message.seenCount,
+            totalRecipients: typeof totalRecipients === 'number' ? totalRecipients : message.totalRecipients,
+            allRecipientsSeen: typeof allRecipientsSeen === 'boolean' ? allRecipientsSeen : message.allRecipientsSeen,
+            senderDeleteAfterSeenAt: typeof senderDeleteAfterSeenAt === 'number' ? senderDeleteAfterSeenAt : message.senderDeleteAfterSeenAt,
+          };
+        });
+
+        if (changed) {
+          newMap.set(conversationId, updated);
+        }
+      }
+
+      return { messagesByConversation: newMap };
+    });
+  },
+
+  removeMessage: (messageId) => {
+    set(state => {
+      const newMap = new Map(state.messagesByConversation);
+      for (const [conversationId, messages] of newMap) {
+        const filtered = messages.filter((message) => message.id !== messageId);
+        if (filtered.length !== messages.length) {
+          newMap.set(conversationId, filtered);
+        }
+      }
       return { messagesByConversation: newMap };
     });
   },

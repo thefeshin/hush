@@ -41,6 +41,7 @@ export function Settings({ onBack, embedded = false }: SettingsProps) {
   const [pinEnabled, setPinEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [disablePinInput, setDisablePinInput] = useState('');
 
   const [pinChangeStep, setPinChangeStep] = useState<PINChangeStep>('old');
   const [oldPin, setOldPin] = useState('');
@@ -83,6 +84,7 @@ export function Settings({ onBack, embedded = false }: SettingsProps) {
     try {
       await disablePIN(pin);
       setPinEnabled(false);
+      setDisablePinInput('');
       setState('view');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to disable PIN');
@@ -165,53 +167,6 @@ export function Settings({ onBack, embedded = false }: SettingsProps) {
     }
     navigate(-1);
   };
-
-  if (state === 'enable-pin') {
-    return <PINSetup onSuccess={handleEnablePIN} onCancel={() => setState('view')} isLoading={isLoading} embedded={embedded} />;
-  }
-
-  if (state === 'disable-pin') {
-    const wrapperClass = embedded
-      ? 'px-4 py-6'
-      : cardWrapper;
-
-    return (
-      <div className={wrapperClass}>
-        <div className={card}>
-          <div>
-            <h1 className={title}>HUSH</h1>
-            <p className={subtitle}>Disable PIN</p>
-          </div>
-          <form onSubmit={(e) => { e.preventDefault(); handleDisablePIN((document.getElementById('disable-pin-input') as HTMLInputElement)?.value || ''); }}>
-            <div className={inputGroup}>
-              <label htmlFor="disable-pin-input" className={label}>Enter current PIN to disable</label>
-              <input
-                id="disable-pin-input"
-                type="password"
-                maxLength={8}
-                autoComplete="current-password"
-                required
-                disabled={isLoading}
-                className={input}
-              />
-            </div>
-            {error && <div className={errorClass}>{error}</div>}
-            <button type="submit" className={primaryButton} disabled={isLoading}>
-              {isLoading ? 'Disabling...' : 'Disable PIN'}
-            </button>
-            <button
-              type="button"
-              className={linkButton}
-              onClick={() => setState('view')}
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
 
   if (state === 'change-pin') {
     const wrapperClass = embedded
@@ -428,6 +383,70 @@ export function Settings({ onBack, embedded = false }: SettingsProps) {
           </section>
         </div>
       </div>
+
+      {state === 'enable-pin' && (
+        <PINSetup
+          onSuccess={handleEnablePIN}
+          onCancel={() => {
+            setError(null);
+            setState('view');
+          }}
+          isLoading={isLoading}
+        />
+      )}
+
+      {state === 'disable-pin' && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" onClick={() => {
+          if (isLoading) return;
+          setError(null);
+          setDisablePinInput('');
+          setState('view');
+        }}>
+          <div className={card} onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h1 className={title}>HUSH</h1>
+              <p className={subtitle}>Disable PIN</p>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleDisablePIN(disablePinInput);
+              }}
+            >
+              <div className={inputGroup}>
+                <label htmlFor="disable-pin-input" className={label}>Enter current PIN to disable</label>
+                <input
+                  id="disable-pin-input"
+                  type="password"
+                  maxLength={8}
+                  autoComplete="current-password"
+                  required
+                  value={disablePinInput}
+                  onChange={(e) => setDisablePinInput(e.target.value)}
+                  disabled={isLoading}
+                  className={input}
+                />
+              </div>
+              {error && <div className={errorClass}>{error}</div>}
+              <button type="submit" className={primaryButton} disabled={isLoading || !disablePinInput}>
+                {isLoading ? 'Disabling...' : 'Disable PIN'}
+              </button>
+              <button
+                type="button"
+                className={linkButton}
+                onClick={() => {
+                  setError(null);
+                  setDisablePinInput('');
+                  setState('view');
+                }}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,7 +10,8 @@ import type { EncryptedData } from '../types/crypto';
 interface UseWebSocketReturn {
   isConnected: boolean;
   connectionState: ConnectionState;
-  sendMessage: (conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => Promise<{ id: string }>;
+  sendMessage: (conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number, expiresAfterSeenSec?: number) => Promise<{ id: string }>;
+  sendMessageSeen: (conversationId: string, messageId: string) => void;
   subscribe: (conversationId: string) => void;
   unsubscribe: (conversationId: string) => void;
   disconnect: () => void;
@@ -19,8 +20,12 @@ interface UseWebSocketReturn {
 export function useWebSocket(): UseWebSocketReturn {
   const realtime = useRealtime();
 
-  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number) => {
-    return realtime.sendMessage(conversationId, encrypted, recipientId, groupEpoch);
+  const sendMessage = useCallback((conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number, expiresAfterSeenSec?: number) => {
+    return realtime.sendMessage(conversationId, encrypted, recipientId, groupEpoch, expiresAfterSeenSec);
+  }, [realtime]);
+
+  const sendMessageSeen = useCallback((conversationId: string, messageId: string) => {
+    realtime.sendMessageSeen(conversationId, messageId);
   }, [realtime]);
 
   const subscribe = useCallback((conversationId: string) => {
@@ -35,6 +40,7 @@ export function useWebSocket(): UseWebSocketReturn {
     isConnected: realtime.isConnected,
     connectionState: realtime.connectionState,
     sendMessage,
+    sendMessageSeen,
     subscribe,
     unsubscribe,
     disconnect: realtime.disconnect

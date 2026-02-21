@@ -29,7 +29,7 @@ export function GroupCreateModal({ onClose, onCreated }: Props) {
     [contacts],
   );
 
-  const canSubmit = name.trim().length > 0 && picked.size >= 2 && !isSubmitting;
+  const canSubmit = name.trim().length > 0 && !isSubmitting;
 
   const toggleMember = (id: string) => {
     setPicked((current) => {
@@ -53,11 +53,6 @@ export function GroupCreateModal({ onClose, onCreated }: Props) {
       setError('Group name is required');
       return;
     }
-    if (picked.size < 2) {
-      setError('Select at least two members');
-      return;
-    }
-
     setIsSubmitting(true);
     setError(null);
 
@@ -133,12 +128,12 @@ export function GroupCreateModal({ onClose, onCreated }: Props) {
           </div>
 
           <div className="mb-2 flex items-center justify-between">
-            <label className="font-medium">Members</label>
+            <label className="font-medium">Members (optional)</label>
             <span className="text-caption text-text-secondary">{picked.size} selected</span>
           </div>
           <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-border bg-bg-primary">
             {sortedContacts.length === 0 ? (
-              <div className="p-4 text-caption text-text-secondary">No contacts available.</div>
+              <div className="p-4 text-caption text-text-secondary">No contacts available. You can create this group now and add members later.</div>
             ) : (
               sortedContacts.map((contact) => (
                 <label key={contact.id} className="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">

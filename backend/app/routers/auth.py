@@ -16,9 +16,13 @@ from passlib.context import CryptContext
 from app.config import settings
 from app.database import get_connection
 from app.schemas.auth import (
-    VaultAccessRequest, VaultAccessResponse,
-    RegisterRequest, LoginRequest,
-    UserResponse, UserLookupResponse, AuthSuccess
+    VaultAccessRequest,
+    VaultAccessResponse,
+    RegisterRequest,
+    LoginRequest,
+    UserResponse,
+    UserLookupResponse,
+    AuthSuccess,
 )
 from app.services.defense import DefenseService
 from app.utils.crypto import constant_time_compare, hash_words
@@ -37,11 +41,7 @@ def create_vault_token() -> tuple[str, int]:
     expires_delta = timedelta(minutes=settings.VAULT_TOKEN_EXPIRE_MINUTES)
     expire = datetime.now(timezone.utc) + expires_delta
 
-    payload = {
-        "exp": expire,
-        "iat": datetime.now(timezone.utc),
-        "type": "vault"
-    }
+    payload = {"exp": expire, "iat": datetime.now(timezone.utc), "type": "vault"}
 
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return token, int(expires_delta.total_seconds())
@@ -50,7 +50,9 @@ def create_vault_token() -> tuple[str, int]:
 def verify_vault_token(token: str) -> bool:
     """Verify vault token is valid"""
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
+        )
         return payload.get("type") == "vault"
     except JWTError:
         return False
@@ -66,7 +68,7 @@ def create_access_token(user_id: UUID, username: str) -> tuple[str, int]:
         "username": username,
         "type": "access",
         "exp": expire,
-        "iat": datetime.now(timezone.utc)
+        "iat": datetime.now(timezone.utc),
     }
 
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
@@ -83,7 +85,9 @@ def hash_refresh_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def set_auth_cookies(response: Response, access_token: str, refresh_token: str, access_expires: int):
+def set_auth_cookies(
+    response: Response, access_token: str, refresh_token: str, access_expires: int
+):
     """Set authentication cookies"""
     refresh_expires = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
 
@@ -95,7 +99,7 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
         secure=True,
         samesite="strict",
         path="/api",
-        max_age=access_expires
+        max_age=access_expires,
     )
 
     # Set access_token for WebSocket connections (/ws path)
@@ -106,7 +110,7 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
         secure=True,
         samesite="strict",
         path="/ws",
-        max_age=access_expires
+        max_age=access_expires,
     )
 
     response.set_cookie(
@@ -116,7 +120,7 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
         secure=True,
         samesite="strict",
         path="/api/auth/refresh",
-        max_age=refresh_expires
+        max_age=refresh_expires,
     )
 
 
@@ -129,9 +133,7 @@ def clear_auth_cookies(response: Response):
 
 @router.post("/auth/vault", response_model=VaultAccessResponse)
 async def verify_vault(
-    request: Request,
-    vault_request: VaultAccessRequest,
-    conn=Depends(get_connection)
+    request: Request, vault_request: VaultAccessRequest, conn=Depends(get_connection)
 ):
     """
     Verify 12-word passphrase and return vault token for registration/login
@@ -151,7 +153,7 @@ async def verify_vault(
         log_rate_limited(client_ip)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={"error": "rate_limited", "message": "Too many requests"}
+            detail={"error": "rate_limited", "message": "Too many requests"},
         )
 
     # Check if IP is blocked
@@ -159,7 +161,7 @@ async def verify_vault(
     if block_status["blocked"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "ip_blocked", "message": "Access denied"}
+            detail={"error": "ip_blocked", "message": "Access denied"},
         )
 
     # Hash submitted words
@@ -175,9 +177,7 @@ async def verify_vault(
         vault_token, expires_in = create_vault_token()
 
         return VaultAccessResponse(
-            vault_token=vault_token,
-            kdf_salt=settings.KDF_SALT,
-            expires_in=expires_in
+            vault_token=vault_token, kdf_salt=settings.KDF_SALT, expires_in=expires_in
         )
     else:
         remaining = await defense.record_failure(client_ip)
@@ -189,8 +189,8 @@ async def verify_vault(
             detail={
                 "error": "invalid_credentials",
                 "message": "Invalid passphrase",
-                "remaining_attempts": max(0, remaining)
-            }
+                "remaining_attempts": max(0, remaining),
+            },
         )
 
 
@@ -199,7 +199,7 @@ async def register(
     request: Request,
     response: Response,
     register_request: RegisterRequest,
-    conn=Depends(get_connection)
+    conn=Depends(get_connection),
 ):
     """
     Register a new user (requires valid vault token)
@@ -214,28 +214,31 @@ async def register(
     if not verify_vault_token(register_request.vault_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_vault_token", "message": "Invalid or expired vault token"}
+            detail={
+                "error": "invalid_vault_token",
+                "message": "Invalid or expired vault token",
+            },
         )
 
     # Check password length
     if len(register_request.password) < settings.PASSWORD_MIN_LENGTH:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "password_too_short", "message": f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters"}
+            detail={
+                "error": "password_too_short",
+                "message": f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters",
+            },
         )
 
     username = register_request.username.lower().strip()
 
     # Check if username already exists
-    existing = await conn.fetchval(
-        "SELECT id FROM users WHERE username = $1",
-        username
-    )
+    existing = await conn.fetchval("SELECT id FROM users WHERE username = $1", username)
 
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"error": "username_taken", "message": "Username already taken"}
+            detail={"error": "username_taken", "message": "Username already taken"},
         )
 
     # Hash password
@@ -250,12 +253,12 @@ async def register(
             RETURNING id, username, created_at
             """,
             username,
-            password_hash
+            password_hash,
         )
     except asyncpg.UniqueViolationError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"error": "username_taken", "message": "Username already taken"}
+            detail={"error": "username_taken", "message": "Username already taken"},
         )
 
     user_id = user["id"]
@@ -267,7 +270,9 @@ async def register(
     refresh_token_hash = hash_refresh_token(refresh_token)
 
     # Store refresh token
-    refresh_expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_expires_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
     await conn.execute(
         """
         INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
@@ -275,7 +280,7 @@ async def register(
         """,
         user_id,
         refresh_token_hash,
-        refresh_expires_at
+        refresh_expires_at,
     )
 
     # Set cookies
@@ -283,7 +288,7 @@ async def register(
 
     return AuthSuccess(
         user=UserResponse(id=user_id, username=user_username),
-        message="Registration successful"
+        message="Registration successful",
     )
 
 
@@ -292,7 +297,7 @@ async def login(
     request: Request,
     response: Response,
     login_request: LoginRequest,
-    conn=Depends(get_connection)
+    conn=Depends(get_connection),
 ):
     """
     Login an existing user (requires valid vault token)
@@ -309,29 +314,33 @@ async def login(
     if not verify_vault_token(login_request.vault_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_vault_token", "message": "Invalid or expired vault token"}
+            detail={
+                "error": "invalid_vault_token",
+                "message": "Invalid or expired vault token",
+            },
         )
 
     username = login_request.username.lower().strip()
 
-    if not auth_rate_limiter.is_allowed(client_ip) or not auth_rate_limiter.is_allowed(f"{client_ip}:{username}"):
+    if not auth_rate_limiter.is_allowed(client_ip) or not auth_rate_limiter.is_allowed(
+        f"{client_ip}:{username}"
+    ):
         log_rate_limited(client_ip)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={"error": "rate_limited", "message": "Too many login attempts"}
+            detail={"error": "rate_limited", "message": "Too many login attempts"},
         )
 
     block_status = await defense.check_ip_blocked(client_ip)
     if block_status["blocked"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "ip_blocked", "message": "Access denied"}
+            detail={"error": "ip_blocked", "message": "Access denied"},
         )
 
     # Get user
     user = await conn.fetchrow(
-        "SELECT id, username, password_hash FROM users WHERE username = $1",
-        username
+        "SELECT id, username, password_hash FROM users WHERE username = $1", username
     )
 
     if not user:
@@ -340,7 +349,10 @@ async def login(
             await defense.trigger_policy(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_credentials", "message": "Invalid username or password"}
+            detail={
+                "error": "invalid_credentials",
+                "message": "Invalid username or password",
+            },
         )
 
     # Verify password
@@ -350,7 +362,10 @@ async def login(
             await defense.trigger_policy(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_credentials", "message": "Invalid username or password"}
+            detail={
+                "error": "invalid_credentials",
+                "message": "Invalid username or password",
+            },
         )
 
     user_id = user["id"]
@@ -359,10 +374,7 @@ async def login(
     # Update last login
     await defense.reset_failures(client_ip)
 
-    await conn.execute(
-        "UPDATE users SET last_login = NOW() WHERE id = $1",
-        user_id
-    )
+    await conn.execute("UPDATE users SET last_login = NOW() WHERE id = $1", user_id)
 
     # Create tokens
     access_token, access_expires = create_access_token(user_id, user_username)
@@ -370,7 +382,9 @@ async def login(
     refresh_token_hash = hash_refresh_token(refresh_token)
 
     # Store refresh token
-    refresh_expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_expires_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
     await conn.execute(
         """
         INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
@@ -378,7 +392,7 @@ async def login(
         """,
         user_id,
         refresh_token_hash,
-        refresh_expires_at
+        refresh_expires_at,
     )
 
     # Set cookies
@@ -386,15 +400,13 @@ async def login(
 
     return AuthSuccess(
         user=UserResponse(id=user_id, username=user_username),
-        message="Login successful"
+        message="Login successful",
     )
 
 
 @router.post("/auth/refresh", response_model=AuthSuccess)
 async def refresh_tokens(
-    request: Request,
-    response: Response,
-    conn=Depends(get_connection)
+    request: Request, response: Response, conn=Depends(get_connection)
 ):
     """
     Refresh tokens using refresh_token cookie
@@ -411,7 +423,7 @@ async def refresh_tokens(
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "missing_token", "message": "No refresh token"}
+            detail={"error": "missing_token", "message": "No refresh token"},
         )
 
     token_hash = hash_refresh_token(refresh_token)
@@ -446,7 +458,9 @@ async def refresh_tokens(
         new_refresh_token = create_refresh_token()
         new_refresh_hash = hash_refresh_token(new_refresh_token)
 
-        refresh_expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        refresh_expires_at = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
         await conn.execute(
             """
             INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
@@ -461,17 +475,12 @@ async def refresh_tokens(
     set_auth_cookies(response, access_token, new_refresh_token, access_expires)
 
     return AuthSuccess(
-        user=UserResponse(id=user_id, username=username),
-        message="Tokens refreshed"
+        user=UserResponse(id=user_id, username=username), message="Tokens refreshed"
     )
 
 
 @router.post("/auth/logout")
-async def logout(
-    request: Request,
-    response: Response,
-    conn=Depends(get_connection)
-):
+async def logout(request: Request, response: Response, conn=Depends(get_connection)):
     """
     Logout user - revoke refresh token and clear cookies
     """
@@ -480,8 +489,7 @@ async def logout(
     if refresh_token:
         token_hash = hash_refresh_token(refresh_token)
         await conn.execute(
-            "UPDATE refresh_tokens SET revoked = TRUE WHERE token_hash = $1",
-            token_hash
+            "UPDATE refresh_tokens SET revoked = TRUE WHERE token_hash = $1", token_hash
         )
 
     clear_auth_cookies(response)
@@ -490,10 +498,7 @@ async def logout(
 
 
 @router.get("/auth/me", response_model=UserResponse)
-async def get_current_user(
-    request: Request,
-    conn=Depends(get_connection)
-):
+async def get_current_user(request: Request, conn=Depends(get_connection)):
     """
     Get current authenticated user from access_token cookie
     """
@@ -502,20 +507,18 @@ async def get_current_user(
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "not_authenticated", "message": "No access token"}
+            detail={"error": "not_authenticated", "message": "No access token"},
         )
 
     try:
         payload = jwt.decode(
-            access_token,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM]
+            access_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
 
         if payload.get("type") != "access":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"error": "invalid_token", "message": "Invalid token type"}
+                detail={"error": "invalid_token", "message": "Invalid token type"},
             )
 
         user_id = UUID(payload["sub"])
@@ -526,16 +529,12 @@ async def get_current_user(
     except (JWTError, KeyError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_token", "message": "Invalid or expired token"}
+            detail={"error": "invalid_token", "message": "Invalid or expired token"},
         )
 
 
 @router.get("/users/lookup", response_model=UserLookupResponse)
-async def lookup_user(
-    request: Request,
-    username: str,
-    conn=Depends(get_connection)
-):
+async def lookup_user(request: Request, username: str, conn=Depends(get_connection)):
     """
     Lookup user by username (requires authentication)
     """
@@ -544,34 +543,30 @@ async def lookup_user(
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "not_authenticated", "message": "Authentication required"}
+            detail={"error": "not_authenticated", "message": "Authentication required"},
         )
 
     try:
         payload = jwt.decode(
-            access_token,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM]
+            access_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
         if payload.get("type") != "access":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     except (JWTError, KeyError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_token", "message": "Invalid or expired token"}
+            detail={"error": "invalid_token", "message": "Invalid or expired token"},
         )
 
     # Lookup user
     username_lower = username.lower().strip()
     user = await conn.fetchrow(
-        "SELECT id, username FROM users WHERE username = $1",
-        username_lower
+        "SELECT id, username FROM users WHERE username = $1", username_lower
     )
 
     if user:
         return UserLookupResponse(
-            found=True,
-            user=UserResponse(id=user["id"], username=user["username"])
+            found=True, user=UserResponse(id=user["id"], username=user["username"])
         )
     else:
         return UserLookupResponse(found=False, user=None)

@@ -24,6 +24,7 @@ interface Props {
 
 export function MessageComposer({ conversationId, participantId, conversationKind = 'direct', groupEpoch }: Props) {
   const [content, setContent] = useState('');
+  const [expiresAfterSeenSec, setExpiresAfterSeenSec] = useState<'' | '15' | '30' | '60'>('');
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -84,7 +85,8 @@ export function MessageComposer({ conversationId, participantId, conversationKin
       conversationId,
       trimmedContent,
       user.id,
-      user.username
+      user.username,
+      expiresAfterSeenSec ? Number(expiresAfterSeenSec) as 15 | 30 | 60 : undefined,
     );
 
     try {
@@ -94,6 +96,7 @@ export function MessageComposer({ conversationId, participantId, conversationKin
         sender_name: user.username,
         content: trimmedContent,
         timestamp: Date.now(),
+        expires_after_seen_sec: expiresAfterSeenSec ? Number(expiresAfterSeenSec) as 15 | 30 | 60 : undefined,
         conversation_kind: conversationKind,
         group_id: conversationKind === 'group' ? conversationId : undefined,
         group_epoch: conversationKind === 'group' ? groupEpoch : undefined,
@@ -114,6 +117,7 @@ export function MessageComposer({ conversationId, participantId, conversationKin
             encrypted,
             conversationKind === 'direct' ? participantId : undefined,
             conversationKind === 'group' ? groupEpoch : undefined,
+            payload.expires_after_seen_sec,
           );
 
           // Save to local storage
@@ -129,6 +133,7 @@ export function MessageComposer({ conversationId, participantId, conversationKin
             encrypted,
             conversationKind === 'direct' ? participantId : undefined,
             conversationKind === 'group' ? groupEpoch : undefined,
+            payload.expires_after_seen_sec,
           );
           await saveMessage(tempId, conversationId, encrypted, payload.timestamp);
           markMessageSent(tempId, tempId);
@@ -141,6 +146,7 @@ export function MessageComposer({ conversationId, participantId, conversationKin
           encrypted,
           conversationKind === 'direct' ? participantId : undefined,
           conversationKind === 'group' ? groupEpoch : undefined,
+          payload.expires_after_seen_sec,
         );
 
         // Save to local storage with the same temporary ID for deterministic replay reconciliation
@@ -169,6 +175,17 @@ export function MessageComposer({ conversationId, participantId, conversationKin
 
   return (
     <form className="flex gap-2 border-t border-border bg-bg-secondary p-4 max-[480px]:p-3" onSubmit={handleSubmit}>
+      <select
+        value={expiresAfterSeenSec}
+        onChange={(e) => setExpiresAfterSeenSec(e.target.value as '' | '15' | '30' | '60')}
+        className="h-10 rounded-lg border border-border bg-bg-primary px-2 text-caption text-text-primary"
+        title="Disappear after seen"
+      >
+        <option value="">Off</option>
+        <option value="15">15s</option>
+        <option value="30">30s</option>
+        <option value="60">1m</option>
+      </select>
       <textarea
         ref={inputRef}
         value={content}

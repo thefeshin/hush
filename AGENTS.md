@@ -29,6 +29,8 @@
 ## Testing Guidelines
 - No automated test framework or coverage gate is currently enforced in this repository.
 - Minimum pre-PR checks: `npm run build`, backend startup check, and a manual end-to-end smoke test through the chat flow.
+- After any Python code change, run `black --check backend/app backend/tests` before opening a PR.
+- If the check fails, run `black backend/app backend/tests` and re-run the check.
 - If adding tests, follow `test_*.py` (backend) and `*.test.tsx` (frontend) naming.
 
 ## Commit & Pull Request Guidelines

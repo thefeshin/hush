@@ -11,14 +11,22 @@ from typing import Set
 class SecurityFilter(logging.Filter):
     """Filter that redacts sensitive information"""
 
-    SENSITIVE_KEYS: Set[str] = {'password', 'token', 'secret', 'words', 'key', 'auth', 'credential'}
+    SENSITIVE_KEYS: Set[str] = {
+        "password",
+        "token",
+        "secret",
+        "words",
+        "key",
+        "auth",
+        "credential",
+    }
 
     def filter(self, record: logging.LogRecord) -> bool:
         # Ensure we never log sensitive data
-        if hasattr(record, 'msg'):
+        if hasattr(record, "msg"):
             msg = str(record.msg).lower()
             for key in self.SENSITIVE_KEYS:
-                if key in msg and '=' in str(record.msg):
+                if key in msg and "=" in str(record.msg):
                     # Likely contains sensitive value assignment
                     record.msg = "[REDACTED - Sensitive data filtered]"
                     break
@@ -28,9 +36,9 @@ class SecurityFilter(logging.Filter):
 def setup_logging():
     """Configure application logging"""
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    ))
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
     handler.addFilter(SecurityFilter())
 
     # Root logger
@@ -57,9 +65,7 @@ def log_auth_success(ip: str):
 
 def log_auth_failure(ip: str, remaining: int):
     """Log authentication failure (no sensitive data)"""
-    security_logger.warning(
-        f"Auth failure from {ip} - {remaining} attempts remaining"
-    )
+    security_logger.warning(f"Auth failure from {ip} - {remaining} attempts remaining")
 
 
 def log_ip_blocked(ip: str, permanent: bool):

@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    name: Frontend | Test and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Frontend | Checkout source
+        uses: actions/checkout@v4
+
+      - name: Frontend | Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend | Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend | Run test suite (Vitest)
+        working-directory: frontend
+        run: npm test
+
+      - name: Frontend | Build production bundle (Vite)
+        working-directory: frontend
+        run: npm run build
+
+  backend-format:
+    name: Backend | Format check (Black)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Backend | Checkout source
+        uses: actions/checkout@v4
+
+      - name: Backend | Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Backend | Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Backend | Install dependencies
+        run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+
+      - name: Backend | Run Black formatter check
+        run: black --check backend/app backend/tests
+
+  backend-tests:
+    name: Backend | Run tests (Pytest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Backend | Checkout source
+        uses: actions/checkout@v4
+
+      - name: Backend | Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Backend | Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Backend | Install dependencies
+        run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+
+      - name: Backend | Run test suite
+        run: PYTHONPATH=backend pytest -q backend/tests

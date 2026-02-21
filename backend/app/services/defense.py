@@ -13,7 +13,7 @@ from app.logging_config import (
     log_auth_failure,
     log_ip_blocked,
     log_db_wipe,
-    log_shutdown
+    log_shutdown,
 )
 
 
@@ -38,11 +38,14 @@ class DefenseService:
         Check if an IP address is blocked
         Returns: {"blocked": bool, "expires_at": Optional[str], "permanent": Optional[bool]}
         """
-        row = await self.conn.fetchrow("""
+        row = await self.conn.fetchrow(
+            """
             SELECT blocked_at, expires_at, reason
             FROM blocked_ips
             WHERE ip_address = $1
-        """, ip)
+        """,
+            ip,
+        )
 
         if row is None:
             return {"blocked": False}
@@ -58,23 +61,29 @@ class DefenseService:
             return {
                 "blocked": True,
                 "expires_at": expires_at.isoformat(),
-                "permanent": False
+                "permanent": False,
             }
 
         # Block expired - remove it
-        await self.conn.execute("""
+        await self.conn.execute(
+            """
             DELETE FROM blocked_ips WHERE ip_address = $1
-        """, ip)
+        """,
+            ip,
+        )
 
         return {"blocked": False}
 
     async def get_failure_count(self, ip: str) -> int:
         """Get current failure count for an IP"""
-        row = await self.conn.fetchrow("""
+        row = await self.conn.fetchrow(
+            """
             SELECT failure_count
             FROM auth_failures
             WHERE ip_address = $1
-        """, ip)
+        """,
+            ip,
+        )
 
         return row["failure_count"] if row else 0
 
@@ -90,13 +99,16 @@ class DefenseService:
             return 0  # Won't reach here
 
         # Upsert failure record
-        await self.conn.execute("""
+        await self.conn.execute(
+            """
             INSERT INTO auth_failures (ip_address, failure_count, first_failure_at, last_failure_at)
             VALUES ($1, 1, NOW(), NOW())
             ON CONFLICT (ip_address) DO UPDATE SET
                 failure_count = auth_failures.failure_count + 1,
                 last_failure_at = NOW()
-        """, ip)
+        """,
+            ip,
+        )
 
         # Get current count
         current = await self.get_failure_count(ip)
@@ -108,9 +120,12 @@ class DefenseService:
 
     async def reset_failures(self, ip: str):
         """Reset failure count on successful auth"""
-        await self.conn.execute("""
+        await self.conn.execute(
+            """
             DELETE FROM auth_failures WHERE ip_address = $1
-        """, ip)
+        """,
+            ip,
+        )
 
     async def trigger_policy(self, ip: str):
         """
@@ -135,13 +150,17 @@ class DefenseService:
             minutes=settings.IP_BLOCK_MINUTES
         )
 
-        await self.conn.execute("""
+        await self.conn.execute(
+            """
             INSERT INTO blocked_ips (ip_address, expires_at, reason)
             VALUES ($1, $2, 'auth_failure_threshold')
             ON CONFLICT (ip_address) DO UPDATE SET
                 expires_at = $2,
                 blocked_at = NOW()
-        """, ip, expires_at)
+        """,
+            ip,
+            expires_at,
+        )
 
         # Clear failure count
         await self.reset_failures(ip)
@@ -150,13 +169,16 @@ class DefenseService:
 
     async def _block_ip_permanent(self, ip: str):
         """Block IP permanently"""
-        await self.conn.execute("""
+        await self.conn.execute(
+            """
             INSERT INTO blocked_ips (ip_address, expires_at, reason)
             VALUES ($1, NULL, 'auth_failure_threshold')
             ON CONFLICT (ip_address) DO UPDATE SET
                 expires_at = NULL,
                 blocked_at = NOW()
-        """, ip)
+        """,
+            ip,
+        )
 
         # Clear failure count
         await self.reset_failures(ip)
@@ -209,7 +231,9 @@ async def cleanup_expired_blocks(conn: asyncpg.Connection):
     Utility function to clean up expired IP blocks
     Can be called periodically or on startup
     """
-    await conn.execute("""
+    await conn.execute(
+        """
         DELETE FROM blocked_ips
         WHERE expires_at IS NOT NULL AND expires_at < NOW()
-    """)
+    """
+    )

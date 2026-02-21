@@ -12,8 +12,11 @@ from app.schemas.auth import (
 )
 
 __all__ = [
-    "ConversationQuery", "ConversationResponse",
-    "MessageCreate", "MessageResponse", "MessageQuery",
+    "ConversationQuery",
+    "ConversationResponse",
+    "MessageCreate",
+    "MessageResponse",
+    "MessageQuery",
     "AuthSuccess",
     "LoginRequest",
     "RegisterRequest",

@@ -14,6 +14,7 @@ from app.config import settings
 
 class AuthenticatedUser:
     """Represents an authenticated user"""
+
     def __init__(self, user_id: UUID, username: str):
         self.user_id = user_id
         self.username = username
@@ -29,20 +30,18 @@ async def get_current_user(request: Request) -> AuthenticatedUser:
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "not_authenticated", "message": "No access token"}
+            detail={"error": "not_authenticated", "message": "No access token"},
         )
 
     try:
         payload = jwt.decode(
-            access_token,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM]
+            access_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
 
         if payload.get("type") != "access":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"error": "invalid_token", "message": "Invalid token type"}
+                detail={"error": "invalid_token", "message": "Invalid token type"},
             )
 
         user_id = UUID(payload["sub"])
@@ -53,7 +52,7 @@ async def get_current_user(request: Request) -> AuthenticatedUser:
     except (JWTError, KeyError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_token", "message": "Invalid or expired token"}
+            detail={"error": "invalid_token", "message": "Invalid or expired token"},
         )
 
 
@@ -64,9 +63,7 @@ async def verify_websocket_token(token: str) -> Optional[AuthenticatedUser]:
     """
     try:
         payload = jwt.decode(
-            token,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM]
+            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
 
         if payload.get("type") != "access":
@@ -116,8 +113,4 @@ async def verify_token(request: Request) -> dict:
     Returns payload dict for backward compatibility
     """
     user = await get_current_user(request)
-    return {
-        "sub": str(user.user_id),
-        "username": user.username,
-        "type": "access"
-    }
+    return {"sub": str(user.user_id), "username": user.username, "type": "access"}

@@ -36,7 +36,9 @@ async def query_conversations(
         user.user_id,
     )
 
-    return [ConversationResponse(id=row["id"], created_at=row["created_at"]) for row in rows]
+    return [
+        ConversationResponse(id=row["id"], created_at=row["created_at"]) for row in rows
+    ]
 
 
 @router.get("/conversations/discover")
@@ -103,7 +105,9 @@ async def discover_conversations(
             "conversation_id": str(row["conversation_id"]),
             "kind": row["kind"],
             "group_name": row["group_name"],
-            "other_user_id": str(row["other_user_id"]) if row["other_user_id"] else None,
+            "other_user_id": (
+                str(row["other_user_id"]) if row["other_user_id"] else None
+            ),
             "other_username": row["other_username"],
         }
         for row in rows

@@ -7,10 +7,18 @@ import type { EncryptedData } from '../types/crypto';
 
 // Message types from server
 interface ServerMessage {
-  type: 'subscribed' | 'unsubscribed' | 'message' | 'message_sent' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed' | 'group_created' | 'group_member_added' | 'group_member_removed' | 'group_key_rotated';
+  type: 'subscribed' | 'unsubscribed' | 'message' | 'message_sent' | 'message_seen' | 'message_deleted_for_user' | 'message_deleted_for_sender' | 'error' | 'heartbeat' | 'pong' | 'user_subscribed' | 'group_created' | 'group_member_added' | 'group_member_removed' | 'group_key_rotated';
   conversation_id?: string;
   sender_id?: string;  // Sender's user ID (plaintext, for auto-discovery)
   id?: string;
+  message_id?: string;
+  seen_by?: string;
+  seen_at?: string;
+  seen_count?: number;
+  total_recipients?: number;
+  all_recipients_seen?: boolean;
+  sender_delete_after_seen_at?: string;
+  expires_after_seen_sec?: number;
   group_epoch?: number;
   group_name?: string;
   user_id?: string;
@@ -41,8 +49,15 @@ interface ClientMessage {
   recipient_id?: string;
   group_epoch?: number;
   client_message_id: string;
+  expires_after_seen_sec?: number;
   ciphertext: string;
   iv: string;
+}
+
+interface ClientMessageSeen {
+  type: 'message_seen';
+  conversation_id: string;
+  message_id: string;
 }
 
 interface ClientPing {
@@ -53,7 +68,7 @@ interface ClientSubscribeUser {
   type: 'subscribe_user';
 }
 
-type ClientPayload = ClientSubscribe | ClientUnsubscribe | ClientMessage | ClientPing | ClientSubscribeUser;
+type ClientPayload = ClientSubscribe | ClientUnsubscribe | ClientMessage | ClientMessageSeen | ClientPing | ClientSubscribeUser;
 
 // Event handlers
 type MessageHandler = (msg: ServerMessage) => void;
@@ -200,7 +215,7 @@ export class WebSocketService {
   /**
    * Send an encrypted message
    */
-  sendMessage(conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number): Promise<{ id: string }> {
+  sendMessage(conversationId: string, encrypted: EncryptedData, recipientId?: string, groupEpoch?: number, expiresAfterSeenSec?: number): Promise<{ id: string }> {
     return new Promise((resolve, reject) => {
       if (this.state !== ConnectionState.CONNECTED || !this.ws) {
         reject(new Error('Not connected'));
@@ -225,6 +240,7 @@ export class WebSocketService {
           conversation_id: conversationId,
           recipient_id: recipientId,
           group_epoch: groupEpoch,
+          expires_after_seen_sec: expiresAfterSeenSec,
           client_message_id: tempId,
           ciphertext: encrypted.ciphertext,
           iv: encrypted.iv
@@ -238,6 +254,17 @@ export class WebSocketService {
           pending.reject(new Error('Message send timeout'));
         }
       }, 10000);
+    });
+  }
+
+  sendMessageSeen(conversationId: string, messageId: string): void {
+    if (this.state !== ConnectionState.CONNECTED || !this.ws) {
+      return;
+    }
+    this.send({
+      type: 'message_seen',
+      conversation_id: conversationId,
+      message_id: messageId,
     });
   }
 

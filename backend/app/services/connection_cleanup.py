@@ -24,7 +24,8 @@ async def cleanup_stale_connections(max_idle_hours: int = 24):
 
             async with ws_manager._lock:
                 stale = [
-                    ws for ws, conn in ws_manager._connections.items()
+                    ws
+                    for ws, conn in ws_manager._connections.items()
                     if conn.last_activity < cutoff
                 ]
 

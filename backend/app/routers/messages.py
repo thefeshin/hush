@@ -24,6 +24,36 @@ from app.utils.payload_validation import decode_base64_field
 router = APIRouter()
 
 
+async def initialize_message_user_state(
+    conn, message_id: UUID, conversation_id: UUID, sender_id: UUID
+):
+    participant_ids = await conn.fetch(
+        """
+        SELECT user_id
+        FROM conversation_participants
+        WHERE conversation_id = $1
+        """,
+        conversation_id,
+    )
+
+    if not participant_ids:
+        return
+
+    values = [
+        (message_id, row["user_id"], row["user_id"] == sender_id)
+        for row in participant_ids
+    ]
+
+    await conn.executemany(
+        """
+        INSERT INTO message_user_state (message_id, user_id, is_sender)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (message_id, user_id) DO NOTHING
+        """,
+        values,
+    )
+
+
 async def ensure_direct_conversation(
     conn,
     conversation_id: UUID,
@@ -57,7 +87,9 @@ async def ensure_direct_conversation(
     await require_conversation_participant(conn, conversation_id, sender_id)
 
 
-@router.post("/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_message(
     message: MessageCreate,
     conn=Depends(get_connection),
@@ -84,15 +116,20 @@ async def create_message(
 
     row = await conn.fetchrow(
         """
-        INSERT INTO messages (conversation_id, sender_id, ciphertext, iv, group_epoch)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, conversation_id, sender_id, group_epoch, ciphertext, iv, created_at
+        INSERT INTO messages (conversation_id, sender_id, ciphertext, iv, group_epoch, expires_after_seen_sec)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, conversation_id, sender_id, group_epoch, expires_after_seen_sec, ciphertext, iv, created_at
         """,
         message.conversation_id,
         user.user_id,
         ciphertext_bytes,
         iv_bytes,
         message.group_epoch,
+        message.expires_after_seen_sec,
+    )
+
+    await initialize_message_user_state(
+        conn, row["id"], row["conversation_id"], user.user_id
     )
 
     broadcast_msg = {
@@ -101,12 +138,17 @@ async def create_message(
         "conversation_id": str(row["conversation_id"]),
         "sender_id": str(row["sender_id"]),
         "group_epoch": row["group_epoch"],
+        "expires_after_seen_sec": (
+            row["expires_after_seen_sec"] if "expires_after_seen_sec" in row else None
+        ),
         "ciphertext": base64.b64encode(row["ciphertext"]).decode("ascii"),
         "iv": base64.b64encode(row["iv"]).decode("ascii"),
         "created_at": row["created_at"].isoformat(),
     }
 
-    await ws_manager.broadcast_to_conversation(str(row["conversation_id"]), broadcast_msg)
+    await ws_manager.broadcast_to_conversation(
+        str(row["conversation_id"]), broadcast_msg
+    )
 
     if message.recipient_id:
         recipient_user_id = str(message.recipient_id)
@@ -121,6 +163,9 @@ async def create_message(
         conversation_id=row["conversation_id"],
         sender_id=row["sender_id"],
         group_epoch=row["group_epoch"],
+        expires_after_seen_sec=(
+            row["expires_after_seen_sec"] if "expires_after_seen_sec" in row else None
+        ),
         ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
         iv=base64.b64encode(row["iv"]).decode("ascii"),
         created_at=row["created_at"],
@@ -130,7 +175,9 @@ async def create_message(
 @router.get("/messages/{conversation_id}", response_model=List[MessageResponse])
 async def get_messages(
     conversation_id: UUID,
-    after: Optional[datetime] = Query(None, description="Get messages after this timestamp"),
+    after: Optional[datetime] = Query(
+        None, description="Get messages after this timestamp"
+    ),
     limit: int = Query(50, ge=1, le=200, description="Maximum messages to return"),
     conn=Depends(get_connection),
     user: AuthenticatedUser = Depends(get_current_user),
@@ -140,26 +187,57 @@ async def get_messages(
     if after:
         rows = await conn.fetch(
             """
-            SELECT id, conversation_id, sender_id, group_epoch, ciphertext, iv, created_at
-            FROM messages
-            WHERE conversation_id = $1 AND created_at > $2
+            SELECT m.id, m.conversation_id, m.sender_id, m.group_epoch, m.expires_after_seen_sec,
+                   mus.seen_at, mus.delete_after_seen_at, m.sender_delete_after_seen_at,
+                   (SELECT COUNT(*) FROM message_user_state r WHERE r.message_id = m.id AND r.is_sender = FALSE AND r.seen_at IS NOT NULL) AS seen_count,
+                   (SELECT COUNT(*) FROM message_user_state r WHERE r.message_id = m.id AND r.is_sender = FALSE) AS total_recipients,
+                   NOT EXISTS (
+                     SELECT 1 FROM message_user_state r
+                     WHERE r.message_id = m.id
+                       AND r.is_sender = FALSE
+                       AND r.seen_at IS NULL
+                   ) AS all_recipients_seen,
+                   m.ciphertext, m.iv, m.created_at
+            FROM messages m
+            JOIN message_user_state mus ON mus.message_id = m.id
+            WHERE m.conversation_id = $1
+              AND m.created_at > $2
+              AND mus.user_id = $3
+              AND mus.deleted_at IS NULL
+              AND (m.sender_id <> $3 OR m.sender_deleted_at IS NULL)
             ORDER BY created_at ASC
-            LIMIT $3
+            LIMIT $4
             """,
             conversation_id,
             after,
+            user.user_id,
             limit,
         )
     else:
         rows = await conn.fetch(
             """
-            SELECT id, conversation_id, sender_id, group_epoch, ciphertext, iv, created_at
-            FROM messages
-            WHERE conversation_id = $1
+            SELECT m.id, m.conversation_id, m.sender_id, m.group_epoch, m.expires_after_seen_sec,
+                   mus.seen_at, mus.delete_after_seen_at, m.sender_delete_after_seen_at,
+                   (SELECT COUNT(*) FROM message_user_state r WHERE r.message_id = m.id AND r.is_sender = FALSE AND r.seen_at IS NOT NULL) AS seen_count,
+                   (SELECT COUNT(*) FROM message_user_state r WHERE r.message_id = m.id AND r.is_sender = FALSE) AS total_recipients,
+                   NOT EXISTS (
+                     SELECT 1 FROM message_user_state r
+                     WHERE r.message_id = m.id
+                       AND r.is_sender = FALSE
+                       AND r.seen_at IS NULL
+                   ) AS all_recipients_seen,
+                   m.ciphertext, m.iv, m.created_at
+            FROM messages m
+            JOIN message_user_state mus ON mus.message_id = m.id
+            WHERE m.conversation_id = $1
+              AND mus.user_id = $2
+              AND mus.deleted_at IS NULL
+              AND (m.sender_id <> $2 OR m.sender_deleted_at IS NULL)
             ORDER BY created_at DESC
-            LIMIT $2
+            LIMIT $3
             """,
             conversation_id,
+            user.user_id,
             limit,
         )
         rows = list(reversed(rows))
@@ -170,6 +248,13 @@ async def get_messages(
             conversation_id=row["conversation_id"],
             sender_id=row["sender_id"],
             group_epoch=row["group_epoch"],
+            expires_after_seen_sec=row["expires_after_seen_sec"],
+            seen_at=row["seen_at"],
+            delete_after_seen_at=row["delete_after_seen_at"],
+            sender_delete_after_seen_at=row["sender_delete_after_seen_at"],
+            seen_count=row["seen_count"],
+            total_recipients=row["total_recipients"],
+            all_recipients_seen=row["all_recipients_seen"],
             ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
             iv=base64.b64encode(row["iv"]).decode("ascii"),
             created_at=row["created_at"],
@@ -186,8 +271,16 @@ async def get_message_count(
 ):
     await require_conversation_participant(conn, conversation_id, user.user_id)
     count = await conn.fetchval(
-        "SELECT COUNT(*) FROM messages WHERE conversation_id = $1",
+        """
+        SELECT COUNT(*)
+        FROM messages m
+        JOIN message_user_state mus ON mus.message_id = m.id
+        WHERE m.conversation_id = $1
+          AND mus.user_id = $2
+          AND mus.deleted_at IS NULL
+        """,
         conversation_id,
+        user.user_id,
     )
     return {"conversation_id": str(conversation_id), "count": count}
 

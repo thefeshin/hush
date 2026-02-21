@@ -25,6 +25,7 @@ HUSH is a self-hosted private messaging vault focused on client-side cryptograph
 - [Guided deployment (recommended)](#guided-deployment-recommended)
 - [Manual Docker deployment](#manual-docker-deployment)
 - [Local Development (Manual, No hush.sh local mode)](#local-development-manual-no-hushsh-local-mode)
+- [CI Parity Checks](#ci-parity-checks)
 - [Offline Deployment (Air-Gapped)](#offline-deployment-air-gapped)
 - [On internet-connected machine](#on-internet-connected-machine)
 - [Transfer to air-gapped machine](#transfer-to-air-gapped-machine)
@@ -126,6 +127,28 @@ npm run dev
 ```
 
 Frontend runs at `http://localhost:3000` (configured in `frontend/vite.config.ts`).
+
+## CI Parity Checks
+
+These commands match the GitHub Actions CI workflow:
+
+Frontend:
+
+```bash
+cd frontend
+npm ci
+npm test
+npm run build
+```
+
+Backend:
+
+```bash
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+black --check app tests
+PYTHONPATH=. pytest -q tests
+```
 
 ## Offline Deployment (Air-Gapped)
 
