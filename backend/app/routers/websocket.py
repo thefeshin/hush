@@ -465,9 +465,9 @@ async def handle_message(websocket: WebSocket, data: dict, pool):
         "sender_id": str(websocket.state.user_id),  # Sender's user ID (plaintext)
         "client_message_id": str(client_message_id) if client_message_id else None,
         "group_epoch": row["group_epoch"],
-        "expires_after_seen_sec": row["expires_after_seen_sec"]
-        if "expires_after_seen_sec" in row
-        else None,
+        "expires_after_seen_sec": (
+            row["expires_after_seen_sec"] if "expires_after_seen_sec" in row else None
+        ),
         "ciphertext": ciphertext,
         "iv": iv,
         "created_at": row["created_at"].isoformat(),
@@ -647,15 +647,17 @@ async def handle_message_seen(websocket: WebSocket, data: dict, pool):
                     "seen_by": str(websocket.state.user_id),
                     "seen_at": seen_at.isoformat(),
                     "seen_count": int(aggregate["seen_count"]) if aggregate else 0,
-                    "total_recipients": int(aggregate["total_recipients"])
-                    if aggregate
-                    else 0,
-                    "all_recipients_seen": bool(aggregate["all_recipients_seen"])
-                    if aggregate
-                    else False,
-                    "sender_delete_after_seen_at": sender_delete_after_seen_at.isoformat()
-                    if sender_delete_after_seen_at
-                    else None,
+                    "total_recipients": (
+                        int(aggregate["total_recipients"]) if aggregate else 0
+                    ),
+                    "all_recipients_seen": (
+                        bool(aggregate["all_recipients_seen"]) if aggregate else False
+                    ),
+                    "sender_delete_after_seen_at": (
+                        sender_delete_after_seen_at.isoformat()
+                        if sender_delete_after_seen_at
+                        else None
+                    ),
                 },
             )
 
@@ -670,15 +672,17 @@ async def handle_message_seen(websocket: WebSocket, data: dict, pool):
                     "seen_by": str(websocket.state.user_id),
                     "seen_at": seen_at.isoformat(),
                     "seen_count": int(aggregate["seen_count"]) if aggregate else 0,
-                    "total_recipients": int(aggregate["total_recipients"])
-                    if aggregate
-                    else 0,
-                    "all_recipients_seen": bool(aggregate["all_recipients_seen"])
-                    if aggregate
-                    else False,
-                    "sender_delete_after_seen_at": sender_delete_after_seen_at.isoformat()
-                    if sender_delete_after_seen_at
-                    else None,
+                    "total_recipients": (
+                        int(aggregate["total_recipients"]) if aggregate else 0
+                    ),
+                    "all_recipients_seen": (
+                        bool(aggregate["all_recipients_seen"]) if aggregate else False
+                    ),
+                    "sender_delete_after_seen_at": (
+                        sender_delete_after_seen_at.isoformat()
+                        if sender_delete_after_seen_at
+                        else None
+                    ),
                 },
             )
 

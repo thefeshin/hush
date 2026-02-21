@@ -81,9 +81,9 @@ class StatefulConn:
                 epoch = 1
             else:
                 group_id, user_id, epoch, encrypted_key_blob = args
-            self.group_key_envelopes[
-                (group_id, user_id, int(epoch))
-            ] = encrypted_key_blob
+            self.group_key_envelopes[(group_id, user_id, int(epoch))] = (
+                encrypted_key_blob
+            )
             return "INSERT 0 1"
 
         if (

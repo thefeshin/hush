@@ -138,9 +138,9 @@ async def create_message(
         "conversation_id": str(row["conversation_id"]),
         "sender_id": str(row["sender_id"]),
         "group_epoch": row["group_epoch"],
-        "expires_after_seen_sec": row["expires_after_seen_sec"]
-        if "expires_after_seen_sec" in row
-        else None,
+        "expires_after_seen_sec": (
+            row["expires_after_seen_sec"] if "expires_after_seen_sec" in row else None
+        ),
         "ciphertext": base64.b64encode(row["ciphertext"]).decode("ascii"),
         "iv": base64.b64encode(row["iv"]).decode("ascii"),
         "created_at": row["created_at"].isoformat(),
@@ -163,9 +163,9 @@ async def create_message(
         conversation_id=row["conversation_id"],
         sender_id=row["sender_id"],
         group_epoch=row["group_epoch"],
-        expires_after_seen_sec=row["expires_after_seen_sec"]
-        if "expires_after_seen_sec" in row
-        else None,
+        expires_after_seen_sec=(
+            row["expires_after_seen_sec"] if "expires_after_seen_sec" in row else None
+        ),
         ciphertext=base64.b64encode(row["ciphertext"]).decode("ascii"),
         iv=base64.b64encode(row["iv"]).decode("ascii"),
         created_at=row["created_at"],

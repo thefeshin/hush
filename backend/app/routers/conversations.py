@@ -105,9 +105,9 @@ async def discover_conversations(
             "conversation_id": str(row["conversation_id"]),
             "kind": row["kind"],
             "group_name": row["group_name"],
-            "other_user_id": str(row["other_user_id"])
-            if row["other_user_id"]
-            else None,
+            "other_user_id": (
+                str(row["other_user_id"]) if row["other_user_id"] else None
+            ),
             "other_username": row["other_username"],
         }
         for row in rows
