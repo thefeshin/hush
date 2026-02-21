@@ -25,6 +25,7 @@ HUSH یک «گاوصندوق پیام‌رسانی خصوصی» خودمیزبا
 - [روش پیشنهادی (تعامل‌محور)](#fa-online-guided)
 - [روش دستی Docker](#fa-online-manual)
 - [توسعه محلی دستی (بدون حالت local در hush.sh)](#fa-local-development)
+- [بررسی‌های هم‌راستا با CI](#fa-ci-parity)
 - [استقرار آفلاین (Air-Gapped)](#fa-offline-deployment)
 - [روی ماشین دارای اینترنت](#fa-offline-build)
 - [انتقال به ماشین آفلاین](#fa-offline-transfer)
@@ -143,6 +144,30 @@ npm run dev
 ```
 
 فرانت روی `http://localhost:3000` بالا می‌آید.
+
+<a id="fa-ci-parity"></a>
+
+## بررسی‌های هم‌راستا با CI
+
+این دستورات با workflow مربوط به GitHub Actions در CI یکسان هستند:
+
+Frontend:
+
+```bash
+cd frontend
+npm ci
+npm test
+npm run build
+```
+
+Backend:
+
+```bash
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+black --check app tests
+PYTHONPATH=. pytest -q tests
+```
 
 <a id="fa-offline-deployment"></a>
 
